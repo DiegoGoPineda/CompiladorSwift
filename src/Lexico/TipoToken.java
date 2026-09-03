@@ -1,16 +1,21 @@
-package lexico;
-// esta va ser la clase de los tokens zzz
+package Lexico;
 
-public enum TipoToken{
-    // palabras reservadas de swift
+public enum TipoToken {
+    // Palabras reservadas
     LET, VAR, IF, ELSE, WHILE, PRINT,
     TIPE_INT, TIPE_STRING, TIPE_DOUBLE, TIPE_BOOL,
-    // identificadores y literales
+
+    // Identificadores y literales
     IDENTIFIER, NUMBER_INT, NUMBER_DOUBLE, STRING_LITERAL, BOOLEAN_LITERAL,
-    // operadores
-    ASSIGN, PLUS, MINUS, MULTIPLY, DIVIDE, EQUALS, NOT_EQUALS, GREATER, LESS,
-    // limitadores
+
+    // Operadores
+    ASSIGN, PLUS, MINUS, MULTIPLY, DIVIDE,
+    EQUALS, NOT_EQUALS,
+    GREATER, LESS, GREATER_EQUAL, LESS_EQUAL, // <-- Agregados aquí
+
+    // Delimitadores
     LPAREN, RPAREN, LBRACE, RBRACE, COLON, COMMA,
-    // controless
+
+    // Controles
     EOF, UNKNOWN
 }
