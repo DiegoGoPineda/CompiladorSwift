@@ -70,7 +70,7 @@ public class InterfazGrafica extends JFrame {
         scrollEditor.setBorder(BorderFactory.createTitledBorder("Código Swift"));
 
         // Tabla de tokens
-        String[] columnas = {"Línea", "Tipo de Token", "Lexema", "Valor Semántico"};
+        String[] columnas = {"Línea", "Lexema", "Tipo de Token", "Valor Semántico"};
         modeloTabla = new DefaultTableModel(columnas, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -123,8 +123,8 @@ public class InterfazGrafica extends JFrame {
             for (Tokens t : tokens) {
                 modeloTabla.addRow(new Object[]{
                     t.linea,
-                    t.tipo,
                     t.lexema,
+                    t.tipo,
                     t.valor != null ? t.valor : "N/A"
                 });
             }
