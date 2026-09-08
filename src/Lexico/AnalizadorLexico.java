@@ -52,14 +52,16 @@ public class AnalizadorLexico {
                         } else if (c == '\n') {
                             linea++;
                             posicion++;
-                        } else if (esLetra(c)) {
-                            lexema.append(c);
-                            posicion++;
-                            estado = 1; // Transición a identificador
-                        } else if (esDigito(c)) {
+                        } else if (esDigito(c)) { 
+                            // 1. PRIORIDAD: Evaluar números primero
                             lexema.append(c);
                             posicion++;
                             estado = 2; // Transición a número entero
+                        } else if (esInicioDeIdentificador(c)) { 
+                            // 2. Solo letras/subguión/caracteres extendidos para iniciar identificador
+                            lexema.append(c);
+                            posicion++;
+                            estado = 1; // Transición a identificador / palabra reservada
                         } else if (c == '"') {
                             posicion++; // No incluimos la comilla inicial en el valor
                             estado = 4; // Transición a cadena
@@ -116,7 +118,7 @@ public class AnalizadorLexico {
                         } else if (c == ',') {
                             listaTokens.add(new Tokens(TipoToken.COMMA, ",", linea));
                             posicion++;
-} else if (c == '>') {
+                        } else if (c == '>') {
                             posicion++;
                             if (posicion < n && entrada.charAt(posicion) == '=') {
                                 listaTokens.add(new Tokens(TipoToken.GREATER_EQUAL, ">=", linea));
@@ -138,23 +140,28 @@ public class AnalizadorLexico {
                         }
                         break;
 
-                    case 1: // ESTADO DE ACEPTACIÓN: IDENTIFICADORES Y PALABRAS RESERVADAS
-                        if (esAlfanumerico(c)) {
+                    case 1: // ESTADO DE IDENTIFICADORES Y PALABRAS RESERVADAS (CON VALIDACIÓN)
+                        if (esContinuacionDeIdentificador(c)) {
                             lexema.append(c);
                             posicion++;
                         } else {
-                            // Salida del autómata para identificador/palabra reservada
                             String texto = lexema.toString();
-                            TipoToken tipo = PALABRAS_RESERVADAS.get(texto);
 
-                            if (tipo == null) {
-                                listaTokens.add(new Tokens(TipoToken.IDENTIFIER, texto, linea));
-                            } else if (tipo == TipoToken.BOOLEAN_LITERAL) {
-                                listaTokens.add(new Tokens(tipo, texto, Boolean.parseBoolean(texto), linea));
+                            // Si contiene un carácter fuera del alfabeto válido
+                            if (contieneCaracterInvalido(texto)) {
+                                listaTokens.add(new Tokens(TipoToken.UNKNOWN, texto, linea));
                             } else {
-                                listaTokens.add(new Tokens(tipo, texto, linea));
+                                TipoToken tipo = PALABRAS_RESERVADAS.get(texto);
+
+                                if (tipo == null) {
+                                    listaTokens.add(new Tokens(TipoToken.IDENTIFIER, texto, linea));
+                                } else if (tipo == TipoToken.BOOLEAN_LITERAL) {
+                                    listaTokens.add(new Tokens(tipo, texto, Boolean.parseBoolean(texto), linea));
+                                } else {
+                                    listaTokens.add(new Tokens(tipo, texto, linea));
+                                }
                             }
-                            estado = 0; // Termina este token y rompe hacia el bucle exterior
+                            estado = 0; // Termina este token
                             break;
                         }
                         break;
@@ -207,7 +214,7 @@ public class AnalizadorLexico {
                         break;
                 }
 
-                // Si volvió a estado 0 habiendo consumido un token compuesto (lexema no vacío), salimos al ciclo principal
+                // Si volvió a estado 0 habiendo consumido un token compuesto, salimos al ciclo principal
                 if (estado == 0 && lexema.length() > 0) {
                     break;
                 }
@@ -223,15 +230,32 @@ public class AnalizadorLexico {
         return listaTokens;
     }
 
-    private boolean esLetra(char c) {
+    // Un identificador NO puede empezar con números
+    private boolean esInicioDeIdentificador(char c) {
+        return esLetraValida(c) || Character.isLetter(c);
+    }
+
+    // Durante la lectura del identificador se aceptan letras, números y caracteres no válidos pegados
+    private boolean esContinuacionDeIdentificador(char c) {
+        return esLetraValida(c) || esDigito(c) || Character.isLetter(c);
+    }
+
+    // Verifica si la palabra acumulada tiene algún carácter fuera del alfabeto válido (ASCII de Swift)
+    private boolean contieneCaracterInvalido(String texto) {
+        for (int i = 0; i < texto.length(); i++) {
+            char c = texto.charAt(i);
+            if (!esLetraValida(c) && !esDigito(c)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean esLetraValida(char c) {
         return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
     }
 
     private boolean esDigito(char c) {
         return c >= '0' && c <= '9';
-    }
-
-    private boolean esAlfanumerico(char c) {
-        return esLetra(c) || esDigito(c);
     }
 }

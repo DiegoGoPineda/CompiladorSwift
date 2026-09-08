@@ -124,7 +124,7 @@ public class Scanner {
         }
 
         if (esFin()) {
-            System.err.println("Error léxico en línea " + linea + ": cadena no cerrada.");
+            System.err.println("Error lexico en línea " + linea + ": cadena no cerrada.");
             return;
         }
 

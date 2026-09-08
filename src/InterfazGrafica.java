@@ -1,12 +1,12 @@
+import Lexico.AnalizadorLexico;
+import Lexico.Tokens;
+import Sintactico.AnalizadorSintactico;
 import java.awt.*;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.List;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
-import Lexico.AnalizadorLexico;
-import Lexico.Tokens;
-import Sintactico.AnalizadorSintactico;
 
 public class InterfazGrafica extends JFrame {
     private JTextArea areaCodigo;
@@ -138,12 +138,12 @@ public class InterfazGrafica extends JFrame {
 
             if (sintaxisValida && erroresDetectados.isEmpty()) {
                 areaConsola.setForeground(new Color(39, 174, 96));
-                areaConsola.setText("✔ ANÁLISIS COMPLETADO SIN ERRORES\n"
+                areaConsola.setText(" ANÁLISIS COMPLETADO SIN ERRORES\n"
                         + "Léxico: " + tokens.size() + " tokens generados correctamente.\n"
                         + "Sintaxis: Estructura gramatical válida.");
             } else {
                 areaConsola.setForeground(new Color(192, 57, 43));
-                areaConsola.setText("✖ SE ENCONTRARON ERRORES:\n" + erroresDetectados);
+                areaConsola.setText(" SE ENCONTRARON ERRORES:\n" + erroresDetectados);
             }
 
         } catch (Exception ex) {

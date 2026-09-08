@@ -1,8 +1,8 @@
 package Sintactico;
 
-import java.util.List;
 import Lexico.TipoToken;
 import Lexico.Tokens;
+import java.util.List;
 
 public class AnalizadorSintactico {
     private final List<Tokens> tokens;
