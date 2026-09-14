@@ -2,6 +2,10 @@ package Sintactico;
 
 import Lexico.TipoToken;
 import Lexico.Tokens;
+import Semantico.GeneradorC3D;
+import Semantico.ResultadoExpresion;
+import Semantico.Simbolo;
+import Semantico.TablaSimbolos;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -11,112 +15,186 @@ public class AnalizadorSintactico {
     private boolean huboError = false;
     private final List<String> listaErrores = new ArrayList<>();
 
+    private final TablaSimbolos tablaSimbolos = new TablaSimbolos();
+    private final GeneradorC3D c3d = new GeneradorC3D();
+
     public AnalizadorSintactico(List<Tokens> tokens) {
         this.tokens = tokens;
     }
 
-    public List<String> getListaErrores() {
-        return listaErrores;
+    public List<String> getListaErrores() { 
+        return listaErrores; 
     }
 
-    // Punto de entrada: Programa -> Declaracion* EOF
+    public GeneradorC3D getGeneradorC3D() { 
+        return c3d; 
+    }
+
+    public TablaSimbolos getTablaSimbolos() { 
+        return tablaSimbolos; 
+    }
+
     public boolean analizar() {
-        while (!esFin()) {
-            declaracion();
+        try {
+            while (!esFin()) {
+                declaracion();
+            }
+        } catch (ParseError e) {
+            return false;
         }
         return !huboError;
     }
 
-    // Regla: decide qué sentencia procesar
     private void declaracion() {
-        try {
-            if (coincide(TipoToken.VAR, TipoToken.LET)) {
-                declaracionVariable();
-            } else if (coincide(TipoToken.IF)) {
-                sentenciaIf();
-            } else if (coincide(TipoToken.WHILE)) {
-                sentenciaWhile();
-            } else if (coincide(TipoToken.PRINT)) {
-                sentenciaPrint();
-            } else if (coincide(TipoToken.IDENTIFIER)) {
-                asignacion();
-            } else {
-                error(mirar(), "Instrucción no válida o símbolo inesperado: '" + mirar().lexema + "'");
-                avanzar();
-            }
-        } catch (ParseError e) {
-            sincronizar();
+        if (coincide(TipoToken.VAR, TipoToken.LET)) {
+            declaracionVariable();
+        } else if (coincide(TipoToken.IF)) {
+            sentenciaIf();
+        } else if (coincide(TipoToken.WHILE)) {
+            sentenciaWhile();
+        } else if (coincide(TipoToken.PRINT)) {
+            sentenciaPrint();
+        } else if (coincide(TipoToken.IDENTIFIER)) {
+            asignacion();
+        } else {
+            error(mirar(), "Instrucción no válida o símbolo inesperado: '" + mirar().lexema + "'");
+            throw new ParseError();
         }
     }
 
-    // var id (: Tipo)? (= Expresion)?
-    // let id (: Tipo)? = Expresion
     private void declaracionVariable() {
         Tokens palabraClave = anterior();
-        consumir(TipoToken.IDENTIFIER, "Se esperaba el identificador (nombre de la variable o constante).");
+        boolean esConstante = (palabraClave.tipo == TipoToken.LET);
 
-        boolean tieneTipo = false;
+        Tokens idToken = consumir(TipoToken.IDENTIFIER, "Se esperaba el identificador.");
+        String nombreVar = idToken.lexema;
+
+        TipoToken tipoDato = null;
         if (coincide(TipoToken.COLON)) {
             if (coincide(TipoToken.TIPE_INT, TipoToken.TIPE_STRING, TipoToken.TIPE_DOUBLE, TipoToken.TIPE_BOOL)) {
-                tieneTipo = true;
+                tipoDato = anterior().tipo;
             } else {
                 error(mirar(), "Se esperaba un tipo de dato válido (Int, String, Double, Bool).");
                 throw new ParseError();
             }
         }
 
+        boolean insertado = tablaSimbolos.insertar(new Simbolo(nombreVar, tipoDato, esConstante, idToken.linea));
+        if (!insertado) {
+            error(idToken, "Error Semántico: La variable '" + nombreVar + "' ya fue declarada previamente.");
+            throw new ParseError();
+        }
+
         if (coincide(TipoToken.ASSIGN)) {
-            expresion();
-        } else {
-            // Regla semántico-sintáctica de Swift: let requiere inicialización obligatoria
-            if (palabraClave.tipo == TipoToken.LET) {
-                error(anterior(), "Las constantes 'let' deben inicializarse con un valor '='.");
+            ResultadoExpresion res = expresion();
+            
+            // Verificación de compatibilidad de tipos
+            if (tipoDato != null && res.getTipoDato() != null && tipoDato != res.getTipoDato()) {
+                error(idToken, "Error Semántico: Incompatibilidad de tipos. No se puede asignar '" 
+                        + res.getTipoDato() + "' a una variable de tipo '" + tipoDato + "'.");
                 throw new ParseError();
             }
-            if (!tieneTipo) {
-                error(anterior(), "Se requiere especificar el tipo (: Tipo) o asignar un valor (= Expresion).");
+            c3d.emitir(nombreVar + " = " + res.getLugar());
+        } else {
+            if (esConstante) {
+                error(idToken, "Error Semántico: La constante 'let " + nombreVar + "' debe inicializarse con un valor.");
                 throw new ParseError();
             }
         }
     }
 
-    // if Condicion { Bloque } (else { Bloque })?
+    private void asignacion() {
+        Tokens idToken = anterior();
+        String nombreVar = idToken.lexema;
+
+        Simbolo sim = tablaSimbolos.buscar(nombreVar);
+        if (sim == null) {
+            error(idToken, "Error Semántico: La variable '" + nombreVar + "' no ha sido declarada.");
+            throw new ParseError();
+        }
+        if (sim.esConstante()) {
+            error(idToken, "Error Semántico: No se puede reasignar un valor a la constante 'let " + nombreVar + "'.");
+            throw new ParseError();
+        }
+
+        consumir(TipoToken.ASSIGN, "Se esperaba '=' en la asignación.");
+        ResultadoExpresion res = expresion();
+
+        if (sim.getTipoDato() != null && res.getTipoDato() != null && sim.getTipoDato() != res.getTipoDato()) {
+            error(idToken, "Error Semántico: Tipo incompatible en la asignación a '" + nombreVar 
+                    + "'. Se esperaba '" + sim.getTipoDato() + "' pero se obtuvo '" + res.getTipoDato() + "'.");
+            throw new ParseError();
+        }
+
+        c3d.emitir(nombreVar + " = " + res.getLugar());
+    }
+
     private void sentenciaIf() {
-        expresion(); // Condición booleana
+        ResultadoExpresion condicion = expresion();
+
+        // Verificación Semántica: Tipo booleano obligatorio en la condición
+        if (condicion.getTipoDato() != TipoToken.TIPE_BOOL) {
+            error(anterior(), "Error Semántico: La condición del 'if' debe ser de tipo booleano ('Bool'), pero se obtuvo '" 
+                    + condicion.getTipoDato() + "'.");
+            throw new ParseError();
+        }
+
+        String etiquetaElse = c3d.nuevaEtiqueta();
+        String etiquetaFin = c3d.nuevaEtiqueta();
+
+        c3d.emitir("if_false " + condicion.getLugar() + " goto " + etiquetaElse);
+
         consumir(TipoToken.LBRACE, "Se esperaba '{' para iniciar el bloque del 'if'.");
         bloque();
         consumir(TipoToken.RBRACE, "Se esperaba '}' para cerrar el bloque del 'if'.");
 
+        c3d.emitir("goto " + etiquetaFin);
+        c3d.emitirEtiqueta(etiquetaElse);
+
         if (coincide(TipoToken.ELSE)) {
             if (coincide(TipoToken.IF)) {
-                sentenciaIf(); // Soporte para 'else if'
+                sentenciaIf();
             } else {
                 consumir(TipoToken.LBRACE, "Se esperaba '{' después de 'else'.");
                 bloque();
                 consumir(TipoToken.RBRACE, "Se esperaba '}' para cerrar el bloque 'else'.");
             }
         }
+
+        c3d.emitirEtiqueta(etiquetaFin);
     }
 
-    // while Condicion { Bloque }
     private void sentenciaWhile() {
-        expresion(); // Condición
+        String etiquetaInicio = c3d.nuevaEtiqueta();
+        String etiquetaFin = c3d.nuevaEtiqueta();
+
+        c3d.emitirEtiqueta(etiquetaInicio);
+
+        ResultadoExpresion condicion = expresion();
+
+        // Verificación Semántica: Tipo booleano obligatorio en la condición
+        if (condicion.getTipoDato() != TipoToken.TIPE_BOOL) {
+            error(anterior(), "Error Semántico: La condición del 'while' debe ser de tipo booleano ('Bool'), pero se obtuvo '" 
+                    + condicion.getTipoDato() + "'.");
+            throw new ParseError();
+        }
+
+        c3d.emitir("if_false " + condicion.getLugar() + " goto " + etiquetaFin);
+
         consumir(TipoToken.LBRACE, "Se esperaba '{' para iniciar el bloque del 'while'.");
         bloque();
         consumir(TipoToken.RBRACE, "Se esperaba '}' para cerrar el bloque del 'while'.");
+
+        c3d.emitir("goto " + etiquetaInicio);
+        c3d.emitirEtiqueta(etiquetaFin);
     }
 
-    // print ( Expresion )
     private void sentenciaPrint() {
         consumir(TipoToken.LPAREN, "Se esperaba '(' después de 'print'.");
-        expresion();
+        ResultadoExpresion valorImprimir = expresion();
         consumir(TipoToken.RPAREN, "Se esperaba ')' para cerrar la llamada a 'print'.");
-    }
-
-    // id = Expresion
-    private void asignacion() {
-        consumir(TipoToken.ASSIGN, "Se esperaba '=' en la asignación.");
-        expresion();
+        c3d.emitir("param " + valorImprimir.getLugar());
+        c3d.emitir("call print, 1");
     }
 
     private void bloque() {
@@ -125,58 +203,90 @@ public class AnalizadorSintactico {
         }
     }
 
-    // Jerarquía de expresiones (Precedencia)
-    // Expresión -> Comparación
-    private void expresion() {
-        comparacion();
+    // --- Jerarquía de expresiones ---
+
+    private ResultadoExpresion expresion() {
+        return comparacion();
     }
 
-    // Comparación: ==, !=, >, <, >=, <=
-    private void comparacion() {
-        termino();
+    private ResultadoExpresion comparacion() {
+        ResultadoExpresion izq = termino();
         while (coincide(TipoToken.GREATER, TipoToken.LESS, TipoToken.GREATER_EQUAL, 
                         TipoToken.LESS_EQUAL, TipoToken.EQUALS, TipoToken.NOT_EQUALS)) {
-            termino();
+            Tokens op = anterior();
+            ResultadoExpresion der = termino();
+            String temp = c3d.nuevoTemporal();
+            c3d.emitir(temp + " = " + izq.getLugar() + " " + op.lexema + " " + der.getLugar());
+            izq = new ResultadoExpresion(temp, TipoToken.TIPE_BOOL);
         }
+        return izq;
     }
 
-    // Término: +, -
-    private void termino() {
-        factor();
+    private ResultadoExpresion termino() {
+        ResultadoExpresion izq = factor();
         while (coincide(TipoToken.PLUS, TipoToken.MINUS)) {
-            factor();
+            Tokens op = anterior();
+            ResultadoExpresion der = factor();
+            String temp = c3d.nuevoTemporal();
+            c3d.emitir(temp + " = " + izq.getLugar() + " " + op.lexema + " " + der.getLugar());
+            
+            TipoToken tipoFinal = (izq.getTipoDato() == TipoToken.TIPE_DOUBLE || der.getTipoDato() == TipoToken.TIPE_DOUBLE) 
+                                  ? TipoToken.TIPE_DOUBLE : izq.getTipoDato();
+            izq = new ResultadoExpresion(temp, tipoFinal);
         }
+        return izq;
     }
 
-    // Factor: *, /
-    private void factor() {
-        primario();
+    private ResultadoExpresion factor() {
+        ResultadoExpresion izq = primario();
         while (coincide(TipoToken.MULTIPLY, TipoToken.DIVIDE)) {
-            primario();
+            Tokens op = anterior();
+            ResultadoExpresion der = primario();
+            String temp = c3d.nuevoTemporal();
+            c3d.emitir(temp + " = " + izq.getLugar() + " " + op.lexema + " " + der.getLugar());
+            
+            TipoToken tipoFinal = (izq.getTipoDato() == TipoToken.TIPE_DOUBLE || der.getTipoDato() == TipoToken.TIPE_DOUBLE) 
+                                  ? TipoToken.TIPE_DOUBLE : izq.getTipoDato();
+            izq = new ResultadoExpresion(temp, tipoFinal);
         }
+        return izq;
     }
 
-    // Elemento primario: Literales, Identificadores o Expresiones entre paréntesis
-    private void primario() {
-        if (coincide(TipoToken.NUMBER_INT, TipoToken.NUMBER_DOUBLE, 
-                     TipoToken.STRING_LITERAL, TipoToken.BOOLEAN_LITERAL, 
-                     TipoToken.IDENTIFIER)) {
-            return;
+    private ResultadoExpresion primario() {
+        if (coincide(TipoToken.NUMBER_INT)) {
+            return new ResultadoExpresion(anterior().lexema, TipoToken.TIPE_INT);
+        }
+        if (coincide(TipoToken.NUMBER_DOUBLE)) {
+            return new ResultadoExpresion(anterior().lexema, TipoToken.TIPE_DOUBLE);
+        }
+        if (coincide(TipoToken.STRING_LITERAL)) {
+            return new ResultadoExpresion(anterior().lexema, TipoToken.TIPE_STRING);
+        }
+        if (coincide(TipoToken.BOOLEAN_LITERAL)) {
+            return new ResultadoExpresion(anterior().lexema, TipoToken.TIPE_BOOL);
+        }
+
+        if (coincide(TipoToken.IDENTIFIER)) {
+            Tokens idToken = anterior();
+            Simbolo sim = tablaSimbolos.buscar(idToken.lexema);
+            if (sim == null) {
+                error(idToken, "Error Semántico: Uso de variable no declarada '" + idToken.lexema + "'.");
+                throw new ParseError();
+            }
+            return new ResultadoExpresion(idToken.lexema, sim.getTipoDato());
         }
 
         if (coincide(TipoToken.LPAREN)) {
-            expresion();
+            ResultadoExpresion expr = expresion();
             consumir(TipoToken.RPAREN, "Se esperaba ')' tras la expresión agrupada.");
-            return;
+            return expr;
         }
 
-        // Corrección de bucle infinito: emitir error y abortar la rama actual
         error(mirar(), "Se esperaba un literal, identificador o '(' pero se encontró '" + mirar().lexema + "'.");
         throw new ParseError();
     }
 
-    // --- Métodos de utilidad y navegación ---
-
+    // Auxiliares de lectura y avance
     private boolean coincide(TipoToken... tipos) {
         for (TipoToken tipo : tipos) {
             if (revisar(tipo)) {
@@ -203,47 +313,25 @@ public class AnalizadorSintactico {
         return anterior();
     }
 
-    private boolean esFin() {
-        return mirar().tipo == TipoToken.EOF;
+    private boolean esFin() { 
+        return mirar().tipo == TipoToken.EOF; 
     }
 
-    private Tokens mirar() {
-        return tokens.get(actual);
+    private Tokens mirar() { 
+        return tokens.get(actual); 
     }
 
-    private Tokens anterior() {
-        return tokens.get(actual - 1);
+    private Tokens anterior() { 
+        return tokens.get(actual - 1); 
     }
 
     private void error(Tokens token, String mensaje) {
         huboError = true;
-        String detalle = String.format("[Error Sintáctico] Línea %d en '%s': %s", 
+        String detalle = String.format("[Error Semántico/Sintáctico] Línea %d en '%s': %s", 
                 token.linea, token.lexema.isEmpty() ? "EOF" : token.lexema, mensaje);
         listaErrores.add(detalle);
         System.err.println(detalle);
     }
 
-    // Modo pánico: descarta tokens hasta llegar a un delimitador o inicio de nueva sentencia
-    private void sincronizar() {
-        avanzar();
-
-        while (!esFin()) {
-            // Si el token anterior cerraba una llave o sentencia
-            if (anterior().tipo == TipoToken.RBRACE) return;
-
-            switch (mirar().tipo) {
-                case VAR:
-                case LET:
-                case IF:
-                case WHILE:
-                case PRINT:
-                    return;
-                default:
-                    avanzar();
-            }
-        }
-    }
-
-    // Clase estática para control interno de excepciones sintácticas
     private static class ParseError extends RuntimeException {}
 }
