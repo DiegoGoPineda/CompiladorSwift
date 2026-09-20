@@ -34,39 +34,41 @@ public class AnalizadorSintactico {
         return tablaSimbolos; 
     }
 
+    // Punto de entrada: permite encontrar múltiples errores reales sin trabarse
     public boolean analizar() {
-        try {
-            while (!esFin()) {
-                declaracion();
-            }
-        } catch (ParseError e) {
-            return false;
+        while (!esFin()) {
+            declaracion();
         }
-        return !huboError;
+        return !huboError && listaErrores.isEmpty();
     }
 
     private void declaracion() {
-        if (coincide(TipoToken.VAR, TipoToken.LET)) {
-            declaracionVariable();
-        } else if (coincide(TipoToken.IF)) {
-            sentenciaIf();
-        } else if (coincide(TipoToken.WHILE)) {
-            sentenciaWhile();
-        } else if (coincide(TipoToken.PRINT)) {
-            sentenciaPrint();
-        } else if (coincide(TipoToken.IDENTIFIER)) {
-            asignacion();
-        } else {
-            error(mirar(), "Instrucción no válida o símbolo inesperado: '" + mirar().lexema + "'");
-            throw new ParseError();
+        try {
+            if (coincide(TipoToken.VAR, TipoToken.LET)) {
+                declaracionVariable();
+            } else if (coincide(TipoToken.IF)) {
+                sentenciaIf();
+            } else if (coincide(TipoToken.WHILE)) {
+                sentenciaWhile();
+            } else if (coincide(TipoToken.PRINT)) {
+                sentenciaPrint();
+            } else if (coincide(TipoToken.IDENTIFIER)) {
+                asignacion();
+            } else {
+                error(mirar(), "Instrucción no válida o símbolo inesperado: '" + mirar().lexema + "'");
+                avanzar();
+            }
+        } catch (ParseError e) {
+            sincronizar();
         }
     }
 
+    // 1. Validar duplicación de variables
     private void declaracionVariable() {
         Tokens palabraClave = anterior();
         boolean esConstante = (palabraClave.tipo == TipoToken.LET);
 
-        Tokens idToken = consumir(TipoToken.IDENTIFIER, "Se esperaba el identificador.");
+        Tokens idToken = consumir(TipoToken.IDENTIFIER, "Se esperaba el identificador de la variable.");
         String nombreVar = idToken.lexema;
 
         TipoToken tipoDato = null;
@@ -79,27 +81,37 @@ public class AnalizadorSintactico {
             }
         }
 
-        boolean insertado = tablaSimbolos.insertar(new Simbolo(nombreVar, tipoDato, esConstante, idToken.linea));
-        if (!insertado) {
-            error(idToken, "Error Semántico: La variable '" + nombreVar + "' ya fue declarada previamente.");
+        // VALIDACIÓN: No permitir redeclarar la misma variable (sin importar el tipo)
+        if (tablaSimbolos.contiene(nombreVar)) {
+            Simbolo previo = tablaSimbolos.buscar(nombreVar);
+            error(idToken, "Error Semántico: La variable '" + nombreVar + "' ya fue declarada previamente (Línea " + previo.getLinea() + ").");
             throw new ParseError();
         }
 
         if (coincide(TipoToken.ASSIGN)) {
             ResultadoExpresion res = expresion();
             
-            // Verificación de compatibilidad de tipos
-            if (tipoDato != null && res.getTipoDato() != null && tipoDato != res.getTipoDato()) {
+            // Si no se especificó tipo con ':', se infiere del valor
+            if (tipoDato == null) {
+                tipoDato = res.getTipoDato();
+            } else if (res.getTipoDato() != null && tipoDato != res.getTipoDato()) {
                 error(idToken, "Error Semántico: Incompatibilidad de tipos. No se puede asignar '" 
                         + res.getTipoDato() + "' a una variable de tipo '" + tipoDato + "'.");
                 throw new ParseError();
             }
+
+            tablaSimbolos.insertar(new Simbolo(nombreVar, tipoDato, esConstante, idToken.linea));
             c3d.emitir(nombreVar + " = " + res.getLugar());
         } else {
             if (esConstante) {
-                error(idToken, "Error Semántico: La constante 'let " + nombreVar + "' debe inicializarse con un valor.");
+                error(idToken, "Error Semántico: La constante 'let " + nombreVar + "' debe inicializarse obligatoriamente con un valor.");
                 throw new ParseError();
             }
+            if (tipoDato == null) {
+                error(idToken, "Error Sintáctico: Se requiere especificar el tipo (: Tipo) o asignar un valor inicial.");
+                throw new ParseError();
+            }
+            tablaSimbolos.insertar(new Simbolo(nombreVar, tipoDato, esConstante, idToken.linea));
         }
     }
 
@@ -107,6 +119,7 @@ public class AnalizadorSintactico {
         Tokens idToken = anterior();
         String nombreVar = idToken.lexema;
 
+        // VALIDACIÓN: Variable declarada y no constante
         Simbolo sim = tablaSimbolos.buscar(nombreVar);
         if (sim == null) {
             error(idToken, "Error Semántico: La variable '" + nombreVar + "' no ha sido declarada.");
@@ -121,7 +134,7 @@ public class AnalizadorSintactico {
         ResultadoExpresion res = expresion();
 
         if (sim.getTipoDato() != null && res.getTipoDato() != null && sim.getTipoDato() != res.getTipoDato()) {
-            error(idToken, "Error Semántico: Tipo incompatible en la asignación a '" + nombreVar 
+            error(idToken, "Error Semántico: Tipo incompatible en asignación a '" + nombreVar 
                     + "'. Se esperaba '" + sim.getTipoDato() + "' pero se obtuvo '" + res.getTipoDato() + "'.");
             throw new ParseError();
         }
@@ -132,9 +145,8 @@ public class AnalizadorSintactico {
     private void sentenciaIf() {
         ResultadoExpresion condicion = expresion();
 
-        // Verificación Semántica: Tipo booleano obligatorio en la condición
         if (condicion.getTipoDato() != TipoToken.TIPE_BOOL) {
-            error(anterior(), "Error Semántico: La condición del 'if' debe ser de tipo booleano ('Bool'), pero se obtuvo '" 
+            error(anterior(), "Error Semántico: La condición del 'if' debe ser de tipo 'Bool', pero se obtuvo '" 
                     + condicion.getTipoDato() + "'.");
             throw new ParseError();
         }
@@ -172,9 +184,8 @@ public class AnalizadorSintactico {
 
         ResultadoExpresion condicion = expresion();
 
-        // Verificación Semántica: Tipo booleano obligatorio en la condición
         if (condicion.getTipoDato() != TipoToken.TIPE_BOOL) {
-            error(anterior(), "Error Semántico: La condición del 'while' debe ser de tipo booleano ('Bool'), pero se obtuvo '" 
+            error(anterior(), "Error Semántico: La condición del 'while' debe ser de tipo 'Bool', pero se obtuvo '" 
                     + condicion.getTipoDato() + "'.");
             throw new ParseError();
         }
@@ -189,10 +200,12 @@ public class AnalizadorSintactico {
         c3d.emitirEtiqueta(etiquetaFin);
     }
 
+    // 2. Validar que la variable a imprimir exista
     private void sentenciaPrint() {
         consumir(TipoToken.LPAREN, "Se esperaba '(' después de 'print'.");
         ResultadoExpresion valorImprimir = expresion();
         consumir(TipoToken.RPAREN, "Se esperaba ')' para cerrar la llamada a 'print'.");
+
         c3d.emitir("param " + valorImprimir.getLugar());
         c3d.emitir("call print, 1");
     }
@@ -203,7 +216,7 @@ public class AnalizadorSintactico {
         }
     }
 
-    // --- Jerarquía de expresiones ---
+    // --- JERARQUÍA DE EXPRESIONES Y TYPE-CHECKING ESTRICTO ---
 
     private ResultadoExpresion expresion() {
         return comparacion();
@@ -215,6 +228,20 @@ public class AnalizadorSintactico {
                         TipoToken.LESS_EQUAL, TipoToken.EQUALS, TipoToken.NOT_EQUALS)) {
             Tokens op = anterior();
             ResultadoExpresion der = termino();
+
+            // Validación semántica en comparaciones:
+            // No comparar String con Int, ni Bool con números
+            if (izq.getTipoDato() != der.getTipoDato()) {
+                // Permitir Int con Double
+                boolean numCompatibles = (izq.getTipoDato() == TipoToken.TIPE_INT && der.getTipoDato() == TipoToken.TIPE_DOUBLE) ||
+                                         (izq.getTipoDato() == TipoToken.TIPE_DOUBLE && der.getTipoDato() == TipoToken.TIPE_INT);
+                if (!numCompatibles) {
+                    error(op, "Error Semántico: No se pueden comparar tipos incompatibles ('" 
+                            + izq.getTipoDato() + "' con '" + der.getTipoDato() + "').");
+                    throw new ParseError();
+                }
+            }
+
             String temp = c3d.nuevoTemporal();
             c3d.emitir(temp + " = " + izq.getLugar() + " " + op.lexema + " " + der.getLugar());
             izq = new ResultadoExpresion(temp, TipoToken.TIPE_BOOL);
@@ -222,16 +249,41 @@ public class AnalizadorSintactico {
         return izq;
     }
 
+    // 1. Validar suma y resta estricta (no permitir String + Int, ni restar String)
     private ResultadoExpresion termino() {
         ResultadoExpresion izq = factor();
         while (coincide(TipoToken.PLUS, TipoToken.MINUS)) {
             Tokens op = anterior();
             ResultadoExpresion der = factor();
+
+            TipoToken tipoFinal = null;
+
+            if (op.tipo == TipoToken.PLUS) {
+                if (izq.getTipoDato() == TipoToken.TIPE_INT && der.getTipoDato() == TipoToken.TIPE_INT) {
+                    tipoFinal = TipoToken.TIPE_INT;
+                } else if (izq.getTipoDato() == TipoToken.TIPE_DOUBLE && der.getTipoDato() == TipoToken.TIPE_DOUBLE) {
+                    tipoFinal = TipoToken.TIPE_DOUBLE;
+                } else if (izq.getTipoDato() == TipoToken.TIPE_STRING && der.getTipoDato() == TipoToken.TIPE_STRING) {
+                    tipoFinal = TipoToken.TIPE_STRING; // Concatenación
+                } else {
+                    error(op, "Error Semántico: Swift no permite el operador '+' entre tipos distintos ('" 
+                            + izq.getTipoDato() + "' y '" + der.getTipoDato() + "'). Se requiere el mismo tipo.");
+                    throw new ParseError();
+                }
+            } else if (op.tipo == TipoToken.MINUS) {
+                if (izq.getTipoDato() == TipoToken.TIPE_INT && der.getTipoDato() == TipoToken.TIPE_INT) {
+                    tipoFinal = TipoToken.TIPE_INT;
+                } else if (izq.getTipoDato() == TipoToken.TIPE_DOUBLE && der.getTipoDato() == TipoToken.TIPE_DOUBLE) {
+                    tipoFinal = TipoToken.TIPE_DOUBLE;
+                } else {
+                    error(op, "Error Semántico: Swift no permite el operador '-' entre tipos distintos ('" 
+                            + izq.getTipoDato() + "' y '" + der.getTipoDato() + "').");
+                    throw new ParseError();
+                }
+            }
+
             String temp = c3d.nuevoTemporal();
             c3d.emitir(temp + " = " + izq.getLugar() + " " + op.lexema + " " + der.getLugar());
-            
-            TipoToken tipoFinal = (izq.getTipoDato() == TipoToken.TIPE_DOUBLE || der.getTipoDato() == TipoToken.TIPE_DOUBLE) 
-                                  ? TipoToken.TIPE_DOUBLE : izq.getTipoDato();
             izq = new ResultadoExpresion(temp, tipoFinal);
         }
         return izq;
@@ -242,11 +294,21 @@ public class AnalizadorSintactico {
         while (coincide(TipoToken.MULTIPLY, TipoToken.DIVIDE)) {
             Tokens op = anterior();
             ResultadoExpresion der = primario();
+
+            TipoToken tipoFinal = null;
+
+            if (izq.getTipoDato() == TipoToken.TIPE_INT && der.getTipoDato() == TipoToken.TIPE_INT) {
+                tipoFinal = TipoToken.TIPE_INT;
+            } else if (izq.getTipoDato() == TipoToken.TIPE_DOUBLE && der.getTipoDato() == TipoToken.TIPE_DOUBLE) {
+                tipoFinal = TipoToken.TIPE_DOUBLE;
+            } else {
+                error(op, "Error Semántico: Swift no permite el operador '" + op.lexema + "' entre tipos distintos ('" 
+                        + izq.getTipoDato() + "' y '" + der.getTipoDato() + "'). Deben coincidir exactamente.");
+                throw new ParseError();
+            }
+
             String temp = c3d.nuevoTemporal();
             c3d.emitir(temp + " = " + izq.getLugar() + " " + op.lexema + " " + der.getLugar());
-            
-            TipoToken tipoFinal = (izq.getTipoDato() == TipoToken.TIPE_DOUBLE || der.getTipoDato() == TipoToken.TIPE_DOUBLE) 
-                                  ? TipoToken.TIPE_DOUBLE : izq.getTipoDato();
             izq = new ResultadoExpresion(temp, tipoFinal);
         }
         return izq;
@@ -260,17 +322,18 @@ public class AnalizadorSintactico {
             return new ResultadoExpresion(anterior().lexema, TipoToken.TIPE_DOUBLE);
         }
         if (coincide(TipoToken.STRING_LITERAL)) {
-            return new ResultadoExpresion(anterior().lexema, TipoToken.TIPE_STRING);
+            return new ResultadoExpresion("\"" + anterior().lexema + "\"", TipoToken.TIPE_STRING);
         }
         if (coincide(TipoToken.BOOLEAN_LITERAL)) {
             return new ResultadoExpresion(anterior().lexema, TipoToken.TIPE_BOOL);
         }
 
+        // VALIDACIÓN: Variable existe en la tabla de símbolos
         if (coincide(TipoToken.IDENTIFIER)) {
             Tokens idToken = anterior();
             Simbolo sim = tablaSimbolos.buscar(idToken.lexema);
             if (sim == null) {
-                error(idToken, "Error Semántico: Uso de variable no declarada '" + idToken.lexema + "'.");
+                error(idToken, "Error Semántico: La variable '" + idToken.lexema + "' no existe o no ha sido declarada.");
                 throw new ParseError();
             }
             return new ResultadoExpresion(idToken.lexema, sim.getTipoDato());
@@ -278,7 +341,7 @@ public class AnalizadorSintactico {
 
         if (coincide(TipoToken.LPAREN)) {
             ResultadoExpresion expr = expresion();
-            consumir(TipoToken.RPAREN, "Se esperaba ')' tras la expresión agrupada.");
+            consumir(TipoToken.RPAREN, "Se esperaba ')' tras la expresión.");
             return expr;
         }
 
@@ -286,7 +349,8 @@ public class AnalizadorSintactico {
         throw new ParseError();
     }
 
-    // Auxiliares de lectura y avance
+    // --- MÉTODOS DE NAVEGACIÓN Y RECUPERACIÓN INTELIGENTE ---
+
     private boolean coincide(TipoToken... tipos) {
         for (TipoToken tipo : tipos) {
             if (revisar(tipo)) {
@@ -327,10 +391,28 @@ public class AnalizadorSintactico {
 
     private void error(Tokens token, String mensaje) {
         huboError = true;
-        String detalle = String.format("[Error Semántico/Sintáctico] Línea %d en '%s': %s", 
-                token.linea, token.lexema.isEmpty() ? "EOF" : token.lexema, mensaje);
+        String detalle = String.format("[Error] Línea %d en '%s': %s", 
+                token.linea, (token.lexema == null || token.lexema.isEmpty()) ? "EOF" : token.lexema, mensaje);
         listaErrores.add(detalle);
-        System.err.println(detalle);
+    }
+
+    // Modo Pánico Inteligente: Salta hasta encontrar el inicio de otra sentencia real
+    private void sincronizar() {
+        avanzar();
+        while (!esFin()) {
+            if (anterior().tipo == TipoToken.RBRACE) return;
+
+            switch (mirar().tipo) {
+                case VAR:
+                case LET:
+                case IF:
+                case WHILE:
+                case PRINT:
+                    return;
+                default:
+                    avanzar();
+            }
+        }
     }
 
     private static class ParseError extends RuntimeException {}

@@ -22,24 +22,27 @@ import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.DefaultTableModel;
 
 public class InterfazGrafica extends JFrame {
     private JTextArea areaCodigo;
+    private JTextArea areaNumerosLinea;
     private JTable tablaTokens;
     private DefaultTableModel modeloTabla;
     private JTextArea areaC3D;
     private JTextArea areaConsola;
 
     public InterfazGrafica() {
-        super("Compilador Swift - Analizador Completo y Código Intermedio");
+        super("Compilador Swift");
         this.configurarVentana();
         this.inicializarComponentes();
     }
 
     private void configurarVentana() {
-        this.setSize(1100, 700);
+        this.setSize(1150, 720);
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         this.setLocationRelativeTo(null);
         this.setLayout(new BorderLayout(10, 10));
@@ -74,17 +77,40 @@ public class InterfazGrafica extends JFrame {
         panelSuperior.add(btnGuardar);
         this.add(panelSuperior, BorderLayout.NORTH);
 
-        // --- 2. EDITOR DE CÓDIGO ---
+        // --- 2. EDITOR DE CÓDIGO CON NÚMEROS DE LÍNEA ---
         this.areaCodigo = new JTextArea();
         this.areaCodigo.setFont(new Font("Consolas", Font.PLAIN, 14));
-        this.areaCodigo.setText("var edad: Int = 20\nlet nombre: String = \"Adrian\"\nvar promedio: Double = 9.5\nlet activo: Bool = true\n\nif edad >= 18 {\n    print(\"Acceso permitido\")\n} else {\n    print(\"Acceso denegado\")\n}\n\nwhile edad > 0 {\n    edad = edad - 1\n}\n");
+
+        // Columna lateral para enumerar las líneas
+        this.areaNumerosLinea = new JTextArea("1 ");
+        this.areaNumerosLinea.setFont(new Font("Consolas", Font.PLAIN, 14));
+        this.areaNumerosLinea.setBackground(new Color(235, 237, 239));
+        this.areaNumerosLinea.setForeground(new Color(120, 144, 156));
+        this.areaNumerosLinea.setEditable(false);
+        this.areaNumerosLinea.setFocusable(false);
+        this.areaNumerosLinea.setBorder(BorderFactory.createEmptyBorder(0, 5, 0, 5));
+
+        // Listener para recalcular números de línea al escribir o borrar
+        this.areaCodigo.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) { actualizarNumerosLinea(); }
+            @Override
+            public void removeUpdate(DocumentEvent e) { actualizarNumerosLinea(); }
+            @Override
+            public void changedUpdate(DocumentEvent e) { actualizarNumerosLinea(); }
+        });
+
         JScrollPane scrollEditor = new JScrollPane(this.areaCodigo);
+        scrollEditor.setRowHeaderView(this.areaNumerosLinea);
         scrollEditor.setBorder(BorderFactory.createTitledBorder("Código Fuente Swift"));
+
+        // Código de prueba limpio de más de 100 líneas
+        this.areaCodigo.setText(obtenerCodigoPruebaInicial());
+        this.actualizarNumerosLinea();
 
         // --- 3. PESTAÑAS DERECHAS (TOKENS Y C3D) ---
         JTabbedPane tabsSalida = new JTabbedPane();
 
-        // Pestaña 1: Tabla de Tokens
         String[] columnas = new String[]{"Línea", "Tipo de Token", "Lexema", "Valor Semántico"};
         this.modeloTabla = new DefaultTableModel(columnas, 0) {
             public boolean isCellEditable(int fila, int columna) { return false; }
@@ -95,7 +121,6 @@ public class InterfazGrafica extends JFrame {
         JScrollPane scrollTabla = new JScrollPane(this.tablaTokens);
         tabsSalida.addTab("Tabla de Tokens", scrollTabla);
 
-        // Pestaña 2: Código Intermedio (C3D)
         this.areaC3D = new JTextArea();
         this.areaC3D.setFont(new Font("Consolas", Font.PLAIN, 13));
         this.areaC3D.setEditable(false);
@@ -103,10 +128,9 @@ public class InterfazGrafica extends JFrame {
         JScrollPane scrollC3D = new JScrollPane(this.areaC3D);
         tabsSalida.addTab("Código Intermedio (C3D)", scrollC3D);
 
-        // División horizontal
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, scrollEditor, tabsSalida);
-        split.setResizeWeight(0.45D);
-        split.setDividerLocation(480);
+        split.setResizeWeight(0.5D);
+        split.setDividerLocation(520);
         this.add(split, BorderLayout.CENTER);
 
         // --- 4. CONSOLA DE DIAGNÓSTICO ---
@@ -117,6 +141,15 @@ public class InterfazGrafica extends JFrame {
         JScrollPane scrollConsola = new JScrollPane(this.areaConsola);
         scrollConsola.setBorder(BorderFactory.createTitledBorder("Consola de Diagnóstico"));
         this.add(scrollConsola, BorderLayout.SOUTH);
+    }
+
+    private void actualizarNumerosLinea() {
+        int totalLineas = areaCodigo.getLineCount();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 1; i <= totalLineas; i++) {
+            sb.append(i).append("\n");
+        }
+        areaNumerosLinea.setText(sb.toString());
     }
 
     private void ejecutarAnalisis() {
@@ -132,7 +165,6 @@ public class InterfazGrafica extends JFrame {
         }
 
         try {
-            // Fase Léxica
             AnalizadorLexico lexer = new AnalizadorLexico(codigo);
             List<Tokens> tokens = lexer.analizar();
 
@@ -142,20 +174,17 @@ public class InterfazGrafica extends JFrame {
                 });
             }
 
-            // Fase Sintáctica, Semántica y C3D
             AnalizadorSintactico parser = new AnalizadorSintactico(tokens);
             boolean esValido = parser.analizar();
             List<String> errores = parser.getListaErrores();
 
             if (esValido && errores.isEmpty()) {
                 this.areaConsola.setForeground(new Color(39, 174, 96));
-                this.areaConsola.setText("✔ COMPILACIÓN EXITOSA\n"
+                this.areaConsola.setText("COMPILACIÓN EXITOSA\n"
                         + "• Léxico: " + tokens.size() + " tokens generados.\n"
                         + "• Sintáctico: Estructura válida.\n"
-                        + "• Semántico: Sin errores de tipos ni alcance.\n"
-                        + "• Código intermedio generado en la pestaña C3D.");
-                
-                // Mostrar C3D generado
+                        + "• Semántico: Sin errores de tipos ni alcance.");
+
                 this.areaC3D.setText(parser.getGeneradorC3D().obtenerCodigoTexto());
             } else {
                 this.areaConsola.setForeground(new Color(192, 57, 43));
@@ -178,6 +207,7 @@ public class InterfazGrafica extends JFrame {
             try {
                 File archivo = selector.getSelectedFile();
                 this.areaCodigo.setText(Files.readString(archivo.toPath()));
+                this.actualizarNumerosLinea();
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, "Error al abrir: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
@@ -194,11 +224,133 @@ public class InterfazGrafica extends JFrame {
                     archivo = new File(archivo.getAbsolutePath() + ".swift");
                 }
                 Files.writeString(archivo.toPath(), this.areaCodigo.getText());
-                JOptionPane.showMessageDialog(this, "Guardado con éxito como " + archivo.getName(), "Información", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Guardado con exito como " + archivo.getName(), "Información", JOptionPane.INFORMATION_MESSAGE);
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, "Error al guardar: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
+    }
+
+    private String obtenerCodigoPruebaInicial() {
+        return """
+            let institucion: String = "Control Escolar"
+            let anio: Int = 2026
+            let cupoMaximo: Int = 50
+            let minimaAprobatoria: Double = 70.0
+
+            var alumnosInscritos: Int = 0
+            var sumaNotas: Double = 0.0
+            var promedio: Double = 0.0
+            var sistemaActivo: Bool = true
+
+            print("Iniciando operaciones del ciclo:")
+            print(institucion)
+
+            var id1: Int = 101
+            var nota1: Double = 85.0
+            var aprobado1: Bool = false
+
+            if nota1 >= minimaAprobatoria {
+                aprobado1 = true
+                print("Estudiante 101 aprobado")
+            } else {
+                aprobado1 = false
+                print("Estudiante 101 reprobado")
+            }
+
+            alumnosInscritos = alumnosInscritos + 1
+            sumaNotas = sumaNotas + nota1
+
+            var id2: Int = 102
+            var nota2: Double = 62.5
+            var aprobado2: Bool = false
+
+            if nota2 >= minimaAprobatoria {
+                aprobado2 = true
+                print("Estudiante 102 aprobado")
+            } else {
+                aprobado2 = false
+                print("Estudiante 102 reprobado")
+            }
+
+            alumnosInscritos = alumnosInscritos + 1
+            sumaNotas = sumaNotas + nota2
+
+            var id3: Int = 103
+            var nota3: Double = 94.0
+            var aprobado3: Bool = false
+
+            if nota3 >= minimaAprobatoria {
+                aprobado3 = true
+                print("Estudiante 103 aprobado")
+            } else {
+                aprobado3 = false
+                print("Estudiante 103 reprobado")
+            }
+
+            alumnosInscritos = alumnosInscritos + 1
+            sumaNotas = sumaNotas + nota3
+
+            var id4: Int = 104
+            var nota4: Double = 78.0
+            var aprobado4: Bool = false
+
+            if nota4 >= minimaAprobatoria {
+                aprobado4 = true
+                print("Estudiante 104 aprobado")
+            } else {
+                aprobado4 = false
+                print("Estudiante 104 reprobado")
+            }
+
+            alumnosInscritos = alumnosInscritos + 1
+            sumaNotas = sumaNotas + nota4
+
+            promedio = sumaNotas / 4.0
+            print("Promedio general calculado:")
+            print(promedio)
+
+            if promedio >= 90.0 {
+                print("Desempenio de excelencia")
+            } else {
+                if promedio >= 70.0 {
+                    print("Desempenio satisfactorio")
+                } else {
+                    print("Desempenio insuficiente")
+                }
+            }
+
+            var lugaresRestantes: Int = cupoMaximo - alumnosInscritos
+            print("Asignando cupos adicionales...")
+
+            while lugaresRestantes > 40 {
+                print("Bloque de alta disponibilidad")
+                lugaresRestantes = lugaresRestantes - 2
+            }
+
+            while lugaresRestantes > 30 {
+                lugaresRestantes = lugaresRestantes - 1
+            }
+
+            var auditoriaCompleta: Bool = false
+
+            if lugaresRestantes >= 30 {
+                auditoriaCompleta = true
+                print("Auditoria finalizada con exito")
+            } else {
+                auditoriaCompleta = false
+                print("Capacidad no coincidente")
+            }
+
+            var pasoVerificacion: Int = 3
+            while pasoVerificacion > 0 {
+                print(pasoVerificacion)
+                pasoVerificacion = pasoVerificacion - 1
+            }
+
+            sistemaActivo = false
+            print("Cierre de sesion completado")
+            """;
     }
 
     public static void main(String[] args) {
