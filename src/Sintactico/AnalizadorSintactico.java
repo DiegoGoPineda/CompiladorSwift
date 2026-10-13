@@ -2,7 +2,7 @@ package Sintactico;
 
 import Lexico.TipoToken;
 import Lexico.Tokens;
-import Semantico.GeneradorC3D;
+import Intermedio.GeneradorC3D;
 import Semantico.ResultadoExpresion;
 import Semantico.Simbolo;
 import Semantico.TablaSimbolos;

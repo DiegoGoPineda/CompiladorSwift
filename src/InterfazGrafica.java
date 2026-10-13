@@ -1,3 +1,4 @@
+import Intermedio.Cuadruplo;
 import Lexico.AnalizadorLexico;
 import Lexico.Tokens;
 import Sintactico.AnalizadorSintactico;
@@ -26,17 +27,20 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.DefaultTableModel;
+import Intermedio.GeneradorC3D;
 
 public class InterfazGrafica extends JFrame {
     private JTextArea areaCodigo;
     private JTextArea areaNumerosLinea;
     private JTable tablaTokens;
-    private DefaultTableModel modeloTabla;
+    private DefaultTableModel modeloTablaTokens;
+    private JTable tablaCuadruplos;
+    private DefaultTableModel modeloTablaCuadruplos;
     private JTextArea areaC3D;
     private JTextArea areaConsola;
 
     public InterfazGrafica() {
-        super("Compilador Swift");
+        super("Compilador Swift - Analizador Completo y Código Intermedio");
         this.configurarVentana();
         this.inicializarComponentes();
     }
@@ -81,7 +85,6 @@ public class InterfazGrafica extends JFrame {
         this.areaCodigo = new JTextArea();
         this.areaCodigo.setFont(new Font("Consolas", Font.PLAIN, 14));
 
-        // Columna lateral para enumerar las líneas
         this.areaNumerosLinea = new JTextArea("1 ");
         this.areaNumerosLinea.setFont(new Font("Consolas", Font.PLAIN, 14));
         this.areaNumerosLinea.setBackground(new Color(235, 237, 239));
@@ -90,7 +93,6 @@ public class InterfazGrafica extends JFrame {
         this.areaNumerosLinea.setFocusable(false);
         this.areaNumerosLinea.setBorder(BorderFactory.createEmptyBorder(0, 5, 0, 5));
 
-        // Listener para recalcular números de línea al escribir o borrar
         this.areaCodigo.getDocument().addDocumentListener(new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) { actualizarNumerosLinea(); }
@@ -104,29 +106,41 @@ public class InterfazGrafica extends JFrame {
         scrollEditor.setRowHeaderView(this.areaNumerosLinea);
         scrollEditor.setBorder(BorderFactory.createTitledBorder("Código Fuente Swift"));
 
-        // Código de prueba limpio de más de 100 líneas
         this.areaCodigo.setText(obtenerCodigoPruebaInicial());
         this.actualizarNumerosLinea();
 
-        // --- 3. PESTAÑAS DERECHAS (TOKENS Y C3D) ---
+        // --- 3. PESTAÑAS DERECHAS (TOKENS, C3D Y CUÁDRUPLOS) ---
         JTabbedPane tabsSalida = new JTabbedPane();
 
-        String[] columnas = new String[]{"Línea", "Tipo de Token", "Lexema", "Valor Semántico"};
-        this.modeloTabla = new DefaultTableModel(columnas, 0) {
+        // Pestaña 1: Tabla de Tokens
+        String[] colTokens = new String[]{"Línea", "Tipo de Token", "Lexema", "Valor Semántico"};
+        this.modeloTablaTokens = new DefaultTableModel(colTokens, 0) {
             public boolean isCellEditable(int fila, int columna) { return false; }
         };
-        this.tablaTokens = new JTable(this.modeloTabla);
+        this.tablaTokens = new JTable(this.modeloTablaTokens);
         this.tablaTokens.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         this.tablaTokens.setRowHeight(22);
-        JScrollPane scrollTabla = new JScrollPane(this.tablaTokens);
-        tabsSalida.addTab("Tabla de Tokens", scrollTabla);
+        JScrollPane scrollTablaTokens = new JScrollPane(this.tablaTokens);
+        tabsSalida.addTab("Tabla de Tokens", scrollTablaTokens);
 
+        // Pestaña 2: Código Intermedio (C3D)
         this.areaC3D = new JTextArea();
         this.areaC3D.setFont(new Font("Consolas", Font.PLAIN, 13));
         this.areaC3D.setEditable(false);
         this.areaC3D.setBackground(new Color(250, 250, 250));
         JScrollPane scrollC3D = new JScrollPane(this.areaC3D);
-        tabsSalida.addTab("Código Intermedio (C3D)", scrollC3D);
+        tabsSalida.addTab("Código C3D", scrollC3D);
+
+        // Pestaña 3: Tabla de Cuádruplos
+        String[] colCuadruplos = new String[]{"Operador (op)", "Argumento 1", "Argumento 2", "Resultado"};
+        this.modeloTablaCuadruplos = new DefaultTableModel(colCuadruplos, 0) {
+            public boolean isCellEditable(int fila, int columna) { return false; }
+        };
+        this.tablaCuadruplos = new JTable(this.modeloTablaCuadruplos);
+        this.tablaCuadruplos.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        this.tablaCuadruplos.setRowHeight(22);
+        JScrollPane scrollTablaCuadruplos = new JScrollPane(this.tablaCuadruplos);
+        tabsSalida.addTab("Tabla de Cuádruplos", scrollTablaCuadruplos);
 
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, scrollEditor, tabsSalida);
         split.setResizeWeight(0.5D);
@@ -153,7 +167,8 @@ public class InterfazGrafica extends JFrame {
     }
 
     private void ejecutarAnalisis() {
-        this.modeloTabla.setRowCount(0);
+        this.modeloTablaTokens.setRowCount(0);
+        this.modeloTablaCuadruplos.setRowCount(0);
         this.areaC3D.setText("");
         this.areaConsola.setText("");
 
@@ -165,27 +180,38 @@ public class InterfazGrafica extends JFrame {
         }
 
         try {
+            // Fase Léxica
             AnalizadorLexico lexer = new AnalizadorLexico(codigo);
             List<Tokens> tokens = lexer.analizar();
 
             for (Tokens t : tokens) {
-                this.modeloTabla.addRow(new Object[]{
+                this.modeloTablaTokens.addRow(new Object[]{
                     t.linea, t.tipo, t.lexema, t.valor != null ? t.valor : "N/A"
                 });
             }
 
+            // Fase Sintáctica, Semántica y Código Intermedio
             AnalizadorSintactico parser = new AnalizadorSintactico(tokens);
             boolean esValido = parser.analizar();
             List<String> errores = parser.getListaErrores();
 
             if (esValido && errores.isEmpty()) {
                 this.areaConsola.setForeground(new Color(39, 174, 96));
-                this.areaConsola.setText("COMPILACIÓN EXITOSA\n"
+                this.areaConsola.setText("✔ COMPILACIÓN EXITOSA\n"
                         + "• Léxico: " + tokens.size() + " tokens generados.\n"
                         + "• Sintáctico: Estructura válida.\n"
-                        + "• Semántico: Sin errores de tipos ni alcance.");
+                        + "• Semántico: Sin errores de tipos ni alcance.\n"
+                        + "• Código intermedio y tabla de cuádruplos generados correctamente.");
 
+                // Mostrar texto C3D
                 this.areaC3D.setText(parser.getGeneradorC3D().obtenerCodigoTexto());
+
+                // Llenar Tabla de Cuádruplos (desde paquete Intermedio)
+                for (Cuadruplo c : parser.getGeneradorC3D().getListaCuadruplos()) {
+                    this.modeloTablaCuadruplos.addRow(new Object[]{
+                        c.getOp(), c.getArg1(), c.getArg2(), c.getResultado()
+                    });
+                }
             } else {
                 this.areaConsola.setForeground(new Color(192, 57, 43));
                 StringBuilder mensajeErrores = new StringBuilder("✖ SE ENCONTRARON ERRORES:\n");
@@ -224,7 +250,7 @@ public class InterfazGrafica extends JFrame {
                     archivo = new File(archivo.getAbsolutePath() + ".swift");
                 }
                 Files.writeString(archivo.toPath(), this.areaCodigo.getText());
-                JOptionPane.showMessageDialog(this, "Guardado con exito como " + archivo.getName(), "Información", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Guardado con éxito como " + archivo.getName(), "Información", JOptionPane.INFORMATION_MESSAGE);
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, "Error al guardar: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
