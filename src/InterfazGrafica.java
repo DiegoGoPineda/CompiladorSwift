@@ -1,5 +1,6 @@
-import Intermedio.Cuadruplo;
+import Intermedio.GeneradorNotaciones;
 import Lexico.AnalizadorLexico;
+import Lexico.TipoToken;
 import Lexico.Tokens;
 import Sintactico.AnalizadorSintactico;
 import java.awt.BorderLayout;
@@ -9,7 +10,10 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.io.File;
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
@@ -27,20 +31,18 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.DefaultTableModel;
-import Intermedio.GeneradorC3D;
 
 public class InterfazGrafica extends JFrame {
     private JTextArea areaCodigo;
     private JTextArea areaNumerosLinea;
     private JTable tablaTokens;
     private DefaultTableModel modeloTablaTokens;
-    private JTable tablaCuadruplos;
-    private DefaultTableModel modeloTablaCuadruplos;
-    private JTextArea areaC3D;
+    private JTextArea areaPrefija;
+    private JTextArea areaPostfija;
     private JTextArea areaConsola;
 
     public InterfazGrafica() {
-        super("Compilador Swift - Analizador Completo y Código Intermedio");
+        super("Compilador Swift - Notaciones y Cuádruplos");
         this.configurarVentana();
         this.inicializarComponentes();
     }
@@ -106,10 +108,18 @@ public class InterfazGrafica extends JFrame {
         scrollEditor.setRowHeaderView(this.areaNumerosLinea);
         scrollEditor.setBorder(BorderFactory.createTitledBorder("Código Fuente Swift"));
 
-        this.areaCodigo.setText(obtenerCodigoPruebaInicial());
+        this.areaCodigo.setText("""
+            var g2: Double = 10.0
+            var h2: Double = 5.0
+            var a2: Double = 8.0
+            var b2: Double = 3.0
+            var c2: Double = 4.0
+
+            var x = ((g2 + h2) * 3.0) / ((a2 - b2) + (c2 * 2.0))
+            """);
         this.actualizarNumerosLinea();
 
-        // --- 3. PESTAÑAS DERECHAS (TOKENS, C3D Y CUÁDRUPLOS) ---
+        // --- 3. PESTAÑAS DERECHAS (TOKENS, PREFIJA Y POSTFIJA) ---
         JTabbedPane tabsSalida = new JTabbedPane();
 
         // Pestaña 1: Tabla de Tokens
@@ -123,28 +133,25 @@ public class InterfazGrafica extends JFrame {
         JScrollPane scrollTablaTokens = new JScrollPane(this.tablaTokens);
         tabsSalida.addTab("Tabla de Tokens", scrollTablaTokens);
 
-        // Pestaña 2: Código Intermedio (C3D)
-        this.areaC3D = new JTextArea();
-        this.areaC3D.setFont(new Font("Consolas", Font.PLAIN, 13));
-        this.areaC3D.setEditable(false);
-        this.areaC3D.setBackground(new Color(250, 250, 250));
-        JScrollPane scrollC3D = new JScrollPane(this.areaC3D);
-        tabsSalida.addTab("Código C3D", scrollC3D);
+        // Pestaña 2: Notación Prefija
+        this.areaPrefija = new JTextArea();
+        this.areaPrefija.setFont(new Font("Consolas", Font.PLAIN, 13));
+        this.areaPrefija.setEditable(false);
+        this.areaPrefija.setBackground(new Color(250, 250, 250));
+        JScrollPane scrollPrefija = new JScrollPane(this.areaPrefija);
+        tabsSalida.addTab("Notación Prefija", scrollPrefija);
 
-        // Pestaña 3: Tabla de Cuádruplos
-        String[] colCuadruplos = new String[]{"Operador (op)", "Argumento 1", "Argumento 2", "Resultado"};
-        this.modeloTablaCuadruplos = new DefaultTableModel(colCuadruplos, 0) {
-            public boolean isCellEditable(int fila, int columna) { return false; }
-        };
-        this.tablaCuadruplos = new JTable(this.modeloTablaCuadruplos);
-        this.tablaCuadruplos.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        this.tablaCuadruplos.setRowHeight(22);
-        JScrollPane scrollTablaCuadruplos = new JScrollPane(this.tablaCuadruplos);
-        tabsSalida.addTab("Tabla de Cuádruplos", scrollTablaCuadruplos);
+        // Pestaña 3: Notación Postfija
+        this.areaPostfija = new JTextArea();
+        this.areaPostfija.setFont(new Font("Consolas", Font.PLAIN, 13));
+        this.areaPostfija.setEditable(false);
+        this.areaPostfija.setBackground(new Color(250, 250, 250));
+        JScrollPane scrollPostfija = new JScrollPane(this.areaPostfija);
+        tabsSalida.addTab("Notación Postfija", scrollPostfija);
 
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, scrollEditor, tabsSalida);
-        split.setResizeWeight(0.5D);
-        split.setDividerLocation(520);
+        split.setResizeWeight(0.45D);
+        split.setDividerLocation(480);
         this.add(split, BorderLayout.CENTER);
 
         // --- 4. CONSOLA DE DIAGNÓSTICO ---
@@ -168,8 +175,8 @@ public class InterfazGrafica extends JFrame {
 
     private void ejecutarAnalisis() {
         this.modeloTablaTokens.setRowCount(0);
-        this.modeloTablaCuadruplos.setRowCount(0);
-        this.areaC3D.setText("");
+        this.areaPrefija.setText("");
+        this.areaPostfija.setText("");
         this.areaConsola.setText("");
 
         String codigo = this.areaCodigo.getText();
@@ -190,7 +197,34 @@ public class InterfazGrafica extends JFrame {
                 });
             }
 
-            // Fase Sintáctica, Semántica y Código Intermedio
+            // Extraer únicamente los tokens pertenecientes a la expresión principal (tras la asignación '=')
+            List<Tokens> expresionTokens = new ArrayList<>();
+            int inicioExpr = -1;
+            int lineaExpr = 1;
+
+            for (int i = 0; i < tokens.size(); i++) {
+                if (tokens.get(i).tipo == TipoToken.ASSIGN) {
+                    inicioExpr = i + 1;
+                    lineaExpr = tokens.get(i).linea;
+                }
+            }
+
+            if (inicioExpr != -1) {
+                for (int i = inicioExpr; i < tokens.size(); i++) {
+                    Tokens t = tokens.get(i);
+                    if (t.tipo == TipoToken.EOF) break;
+                    expresionTokens.add(t);
+                }
+            } else {
+                for (Tokens t : tokens) {
+                    if (t.tipo != TipoToken.EOF) expresionTokens.add(t);
+                }
+                if (!expresionTokens.isEmpty()) {
+                    lineaExpr = expresionTokens.get(0).linea;
+                }
+            }
+
+            // Fase Sintáctica y Semántica
             AnalizadorSintactico parser = new AnalizadorSintactico(tokens);
             boolean esValido = parser.analizar();
             List<String> errores = parser.getListaErrores();
@@ -200,18 +234,32 @@ public class InterfazGrafica extends JFrame {
                 this.areaConsola.setText("✔ COMPILACIÓN EXITOSA\n"
                         + "• Léxico: " + tokens.size() + " tokens generados.\n"
                         + "• Sintáctico: Estructura válida.\n"
-                        + "• Semántico: Sin errores de tipos ni alcance.\n"
-                        + "• Código intermedio y tabla de cuádruplos generados correctamente.");
+                        + "• Notaciones, Cuádruplos y Evaluación de la expresión calculados con éxito.");
 
-                // Mostrar texto C3D
-                this.areaC3D.setText(parser.getGeneradorC3D().obtenerCodigoTexto());
-
-                // Llenar Tabla de Cuádruplos (desde paquete Intermedio)
-                for (Cuadruplo c : parser.getGeneradorC3D().getListaCuadruplos()) {
-                    this.modeloTablaCuadruplos.addRow(new Object[]{
-                        c.getOp(), c.getArg1(), c.getArg2(), c.getResultado()
-                    });
+                // Mapear los valores de variables declaradas en el programa (ej. var g2: Double = 10.0)
+                Map<String, Double> mapaValores = new HashMap<>();
+                for (int i = 0; i < tokens.size() - 1; i++) {
+                    if (tokens.get(i).tipo == TipoToken.IDENTIFIER) {
+                        String nombreVar = tokens.get(i).lexema;
+                        for (int j = i + 1; j < tokens.size() - 1 && tokens.get(j).linea == tokens.get(i).linea; j++) {
+                            if (tokens.get(j).tipo == TipoToken.ASSIGN) {
+                                Tokens valorToken = tokens.get(j + 1);
+                                if (valorToken.tipo == TipoToken.NUMBER_INT || valorToken.tipo == TipoToken.NUMBER_DOUBLE) {
+                                    try {
+                                        mapaValores.put(nombreVar, Double.parseDouble(valorToken.lexema));
+                                    } catch (Exception ignored) {}
+                                }
+                                break;
+                            }
+                        }
+                    }
                 }
+
+                // Generar reportes con evaluación
+                GeneradorNotaciones generador = new GeneradorNotaciones();
+                this.areaPostfija.setText(generador.generarReportePostfijo(expresionTokens, 1, lineaExpr, mapaValores));
+                this.areaPrefija.setText(generador.generarReportePrefijo(expresionTokens, 1, lineaExpr, mapaValores));
+
             } else {
                 this.areaConsola.setForeground(new Color(192, 57, 43));
                 StringBuilder mensajeErrores = new StringBuilder("✖ SE ENCONTRARON ERRORES:\n");
@@ -255,128 +303,6 @@ public class InterfazGrafica extends JFrame {
                 JOptionPane.showMessageDialog(this, "Error al guardar: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
-    }
-
-    private String obtenerCodigoPruebaInicial() {
-        return """
-            let institucion: String = "Control Escolar"
-            let anio: Int = 2026
-            let cupoMaximo: Int = 50
-            let minimaAprobatoria: Double = 70.0
-
-            var alumnosInscritos: Int = 0
-            var sumaNotas: Double = 0.0
-            var promedio: Double = 0.0
-            var sistemaActivo: Bool = true
-
-            print("Iniciando operaciones del ciclo:")
-            print(institucion)
-
-            var id1: Int = 101
-            var nota1: Double = 85.0
-            var aprobado1: Bool = false
-
-            if nota1 >= minimaAprobatoria {
-                aprobado1 = true
-                print("Estudiante 101 aprobado")
-            } else {
-                aprobado1 = false
-                print("Estudiante 101 reprobado")
-            }
-
-            alumnosInscritos = alumnosInscritos + 1
-            sumaNotas = sumaNotas + nota1
-
-            var id2: Int = 102
-            var nota2: Double = 62.5
-            var aprobado2: Bool = false
-
-            if nota2 >= minimaAprobatoria {
-                aprobado2 = true
-                print("Estudiante 102 aprobado")
-            } else {
-                aprobado2 = false
-                print("Estudiante 102 reprobado")
-            }
-
-            alumnosInscritos = alumnosInscritos + 1
-            sumaNotas = sumaNotas + nota2
-
-            var id3: Int = 103
-            var nota3: Double = 94.0
-            var aprobado3: Bool = false
-
-            if nota3 >= minimaAprobatoria {
-                aprobado3 = true
-                print("Estudiante 103 aprobado")
-            } else {
-                aprobado3 = false
-                print("Estudiante 103 reprobado")
-            }
-
-            alumnosInscritos = alumnosInscritos + 1
-            sumaNotas = sumaNotas + nota3
-
-            var id4: Int = 104
-            var nota4: Double = 78.0
-            var aprobado4: Bool = false
-
-            if nota4 >= minimaAprobatoria {
-                aprobado4 = true
-                print("Estudiante 104 aprobado")
-            } else {
-                aprobado4 = false
-                print("Estudiante 104 reprobado")
-            }
-
-            alumnosInscritos = alumnosInscritos + 1
-            sumaNotas = sumaNotas + nota4
-
-            promedio = sumaNotas / 4.0
-            print("Promedio general calculado:")
-            print(promedio)
-
-            if promedio >= 90.0 {
-                print("Desempenio de excelencia")
-            } else {
-                if promedio >= 70.0 {
-                    print("Desempenio satisfactorio")
-                } else {
-                    print("Desempenio insuficiente")
-                }
-            }
-
-            var lugaresRestantes: Int = cupoMaximo - alumnosInscritos
-            print("Asignando cupos adicionales...")
-
-            while lugaresRestantes > 40 {
-                print("Bloque de alta disponibilidad")
-                lugaresRestantes = lugaresRestantes - 2
-            }
-
-            while lugaresRestantes > 30 {
-                lugaresRestantes = lugaresRestantes - 1
-            }
-
-            var auditoriaCompleta: Bool = false
-
-            if lugaresRestantes >= 30 {
-                auditoriaCompleta = true
-                print("Auditoria finalizada con exito")
-            } else {
-                auditoriaCompleta = false
-                print("Capacidad no coincidente")
-            }
-
-            var pasoVerificacion: Int = 3
-            while pasoVerificacion > 0 {
-                print(pasoVerificacion)
-                pasoVerificacion = pasoVerificacion - 1
-            }
-
-            sistemaActivo = false
-            print("Cierre de sesion completado")
-            """;
     }
 
     public static void main(String[] args) {
