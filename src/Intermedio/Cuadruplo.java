@@ -19,3 +19,5 @@ public class Cuadruplo {
     public String getResultado() { return resultado; }
     
 }
+
+

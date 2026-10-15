@@ -5,7 +5,7 @@ import Lexico.TipoToken;
 public class Simbolo {
     private final String nombre;
     private final TipoToken tipoDato;
-    private final boolean esConstante; // true si se declaró con 'let'
+    private final boolean esConstante; // true si se declaro con 'let'
     private final int linea;
 
     public Simbolo(String nombre, TipoToken tipoDato, boolean esConstante, int linea) {
@@ -20,3 +20,5 @@ public class Simbolo {
     public boolean esConstante() { return esConstante; }
     public int getLinea() { return linea; }
 }
+
+

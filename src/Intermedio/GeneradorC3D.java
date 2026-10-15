@@ -20,7 +20,7 @@ public class GeneradorC3D {
     public void emitir(String instruccion) {
         instrucciones.add(instruccion);
         
-        // Generar el cuádruplo equivalente automáticamente
+        // Generar el cuadruplo equivalente 
         generarCuadruploDesdeInstruccion(instruccion);
     }
 
@@ -37,11 +37,11 @@ public class GeneradorC3D {
         return listaCuadruplos;
     }
 
-    // Parsea las instrucciones C3D estándar a Cuádruplos
+    // Parsea las instrucciones a cuadruplos
     private void generarCuadruploDesdeInstruccion(String ins) {
         ins = ins.trim();
         
-        // Caso: Asignación u Operación (res = arg1 op arg2 O res = arg1)
+        // cuando hay una operacion con su =
         if (ins.contains("=")) {
             String[] partes = ins.split("=");
             String res = partes[0].trim();

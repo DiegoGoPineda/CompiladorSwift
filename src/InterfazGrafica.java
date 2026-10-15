@@ -1,4 +1,5 @@
 import Intermedio.GeneradorNotaciones;
+import Intermedio.GeneradorNotaciones.ExpresionInfo;
 import Lexico.AnalizadorLexico;
 import Lexico.TipoToken;
 import Lexico.Tokens;
@@ -116,13 +117,26 @@ public class InterfazGrafica extends JFrame {
             var c2: Double = 4.0
 
             var x = ((g2 + h2) * 3.0) / ((a2 - b2) + (c2 * 2.0))
+
+            var a: Int = 12
+            var b: Int = 4
+            var c: Int = 2
+            var d: Int = 3
+
+            var resultado = (a + b * c) / (d + 1)
+
+
+            var x1: Double = 20.0
+            var y1: Double = 5.0
+            var z1: Double = 2.0
+
+            var total = x1 / y1 + z1 * 4.0 - 3.0
             """);
         this.actualizarNumerosLinea();
 
         // --- 3. PESTAÑAS DERECHAS (TOKENS, PREFIJA Y POSTFIJA) ---
         JTabbedPane tabsSalida = new JTabbedPane();
 
-        // Pestaña 1: Tabla de Tokens
         String[] colTokens = new String[]{"Línea", "Tipo de Token", "Lexema", "Valor Semántico"};
         this.modeloTablaTokens = new DefaultTableModel(colTokens, 0) {
             public boolean isCellEditable(int fila, int columna) { return false; }
@@ -133,7 +147,6 @@ public class InterfazGrafica extends JFrame {
         JScrollPane scrollTablaTokens = new JScrollPane(this.tablaTokens);
         tabsSalida.addTab("Tabla de Tokens", scrollTablaTokens);
 
-        // Pestaña 2: Notación Prefija
         this.areaPrefija = new JTextArea();
         this.areaPrefija.setFont(new Font("Consolas", Font.PLAIN, 13));
         this.areaPrefija.setEditable(false);
@@ -141,7 +154,6 @@ public class InterfazGrafica extends JFrame {
         JScrollPane scrollPrefija = new JScrollPane(this.areaPrefija);
         tabsSalida.addTab("Notación Prefija", scrollPrefija);
 
-        // Pestaña 3: Notación Postfija
         this.areaPostfija = new JTextArea();
         this.areaPostfija.setFont(new Font("Consolas", Font.PLAIN, 13));
         this.areaPostfija.setEditable(false);
@@ -197,30 +209,61 @@ public class InterfazGrafica extends JFrame {
                 });
             }
 
-            // Extraer únicamente los tokens pertenecientes a la expresión principal (tras la asignación '=')
-            List<Tokens> expresionTokens = new ArrayList<>();
-            int inicioExpr = -1;
-            int lineaExpr = 1;
-
-            for (int i = 0; i < tokens.size(); i++) {
-                if (tokens.get(i).tipo == TipoToken.ASSIGN) {
-                    inicioExpr = i + 1;
-                    lineaExpr = tokens.get(i).linea;
+            // Mapear los valores de variables declaradas numéricamente
+            Map<String, Double> mapaValores = new HashMap<>();
+            for (int i = 0; i < tokens.size() - 1; i++) {
+                if (tokens.get(i).tipo == TipoToken.IDENTIFIER) {
+                    String nombreVar = tokens.get(i).lexema;
+                    for (int j = i + 1; j < tokens.size() - 1 && tokens.get(j).linea == tokens.get(i).linea; j++) {
+                        if (tokens.get(j).tipo == TipoToken.ASSIGN) {
+                            Tokens valorToken = tokens.get(j + 1);
+                            if (valorToken.tipo == TipoToken.NUMBER_INT || valorToken.tipo == TipoToken.NUMBER_DOUBLE) {
+                                try {
+                                    mapaValores.put(nombreVar, Double.parseDouble(valorToken.lexema));
+                                } catch (Exception ignored) {}
+                            }
+                            break;
+                        }
+                    }
                 }
             }
 
-            if (inicioExpr != -1) {
-                for (int i = inicioExpr; i < tokens.size(); i++) {
-                    Tokens t = tokens.get(i);
-                    if (t.tipo == TipoToken.EOF) break;
-                    expresionTokens.add(t);
+            // Detectar TODAS las expresiones compuestas (asignaciones con operadores o paréntesis)
+            List<ExpresionInfo> listaExpresiones = new ArrayList<>();
+            int numExpr = 1;
+
+            for (int i = 0; i < tokens.size(); i++) {
+                if (tokens.get(i).tipo == TipoToken.ASSIGN) {
+                    int linea = tokens.get(i).linea;
+                    List<Tokens> expr = new ArrayList<>();
+                    boolean tieneOperador = false;
+
+                    int j = i + 1;
+                    while (j < tokens.size() && tokens.get(j).linea == linea && tokens.get(j).tipo != TipoToken.EOF) {
+                        Tokens t = tokens.get(j);
+                        expr.add(t);
+                        if (t.tipo == TipoToken.PLUS || t.tipo == TipoToken.MINUS ||
+                            t.tipo == TipoToken.MULTIPLY || t.tipo == TipoToken.DIVIDE ||
+                            t.tipo == TipoToken.LPAREN) {
+                            tieneOperador = true;
+                        }
+                        j++;
+                    }
+
+                    if (tieneOperador && !expr.isEmpty()) {
+                        listaExpresiones.add(new ExpresionInfo(numExpr++, linea, expr));
+                    }
                 }
-            } else {
+            }
+
+            // Si no hay asignaciones complejas, tomar todo el bloque como una expresión
+            if (listaExpresiones.isEmpty()) {
+                List<Tokens> expr = new ArrayList<>();
                 for (Tokens t : tokens) {
-                    if (t.tipo != TipoToken.EOF) expresionTokens.add(t);
+                    if (t.tipo != TipoToken.EOF) expr.add(t);
                 }
-                if (!expresionTokens.isEmpty()) {
-                    lineaExpr = expresionTokens.get(0).linea;
+                if (!expr.isEmpty()) {
+                    listaExpresiones.add(new ExpresionInfo(1, expr.get(0).linea, expr));
                 }
             }
 
@@ -234,31 +277,11 @@ public class InterfazGrafica extends JFrame {
                 this.areaConsola.setText("✔ COMPILACIÓN EXITOSA\n"
                         + "• Léxico: " + tokens.size() + " tokens generados.\n"
                         + "• Sintáctico: Estructura válida.\n"
-                        + "• Notaciones, Cuádruplos y Evaluación de la expresión calculados con éxito.");
+                        + "• Expresiones procesadas: " + listaExpresiones.size() + " encontradas.");
 
-                // Mapear los valores de variables declaradas en el programa (ej. var g2: Double = 10.0)
-                Map<String, Double> mapaValores = new HashMap<>();
-                for (int i = 0; i < tokens.size() - 1; i++) {
-                    if (tokens.get(i).tipo == TipoToken.IDENTIFIER) {
-                        String nombreVar = tokens.get(i).lexema;
-                        for (int j = i + 1; j < tokens.size() - 1 && tokens.get(j).linea == tokens.get(i).linea; j++) {
-                            if (tokens.get(j).tipo == TipoToken.ASSIGN) {
-                                Tokens valorToken = tokens.get(j + 1);
-                                if (valorToken.tipo == TipoToken.NUMBER_INT || valorToken.tipo == TipoToken.NUMBER_DOUBLE) {
-                                    try {
-                                        mapaValores.put(nombreVar, Double.parseDouble(valorToken.lexema));
-                                    } catch (Exception ignored) {}
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // Generar reportes con evaluación
                 GeneradorNotaciones generador = new GeneradorNotaciones();
-                this.areaPostfija.setText(generador.generarReportePostfijo(expresionTokens, 1, lineaExpr, mapaValores));
-                this.areaPrefija.setText(generador.generarReportePrefijo(expresionTokens, 1, lineaExpr, mapaValores));
+                this.areaPostfija.setText(generador.generarReportePostfijo(listaExpresiones, mapaValores));
+                this.areaPrefija.setText(generador.generarReportePrefijo(listaExpresiones, mapaValores));
 
             } else {
                 this.areaConsola.setForeground(new Color(192, 57, 43));

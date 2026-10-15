@@ -1,16 +1,28 @@
 package Intermedio;
 
-import Lexico.Tokens;
 import Lexico.TipoToken;
+import Lexico.Tokens;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class GeneradorNotaciones {
+
+    // Estructura contenedora de cada expresión detectada en el código
+    public static class ExpresionInfo {
+        public int numero;
+        public int linea;
+        public List<Tokens> tokens;
+
+        public ExpresionInfo(int numero, int linea, List<Tokens> tokens) {
+            this.numero = numero;
+            this.linea = linea;
+            this.tokens = tokens;
+        }
+    }
 
     private int precedencia(Tokens t) {
         switch (t.tipo) {
@@ -77,7 +89,6 @@ public class GeneradorNotaciones {
         return posfijaInvertida;
     }
 
-    // --- EVALUADOR DE EXPRESIONES (Cálculo del resultado real) ---
     public double evaluarPosfija(List<Tokens> posfija, Map<String, Double> valoresVariables) {
         Deque<Double> pila = new ArrayDeque<>();
 
@@ -145,78 +156,84 @@ public class GeneradorNotaciones {
         return lista;
     }
 
-    // --- GENERACIÓN DE REPORTES CON RESULTADO INTEGRADO ---
+    // --- GENERACIÓN DE REPORTES MULTI-EXPRESIÓN ---
 
-    public String generarReportePostfijo(List<Tokens> infija, int numExpresion, int linea, Map<String, Double> mapaValores) {
-        List<Tokens> post = infijaAPosfija(infija);
-        List<String[]> cuadruplos = cuadruplosPostfijo(post);
-        double resultadoNum = evaluarPosfija(post, mapaValores);
-
+    public String generarReportePostfijo(List<ExpresionInfo> expresiones, Map<String, Double> mapaValores) {
         StringBuilder sb = new StringBuilder();
         sb.append("=========================================================\n");
-        sb.append("            CONVERSIÓN A NOTACIÓN POSTFIJA               \n");
+        sb.append("            CONVERSION A NOTACION POSTFIJA               \n");
         sb.append("=========================================================\n\n");
-        sb.append("Total de expresiones encontradas: 1\n\n");
-        sb.append("---------------------------------------------------------\n");
-        sb.append("Expresión #").append(numExpresion).append("   [Línea ").append(linea).append("]\n");
-        sb.append("---------------------------------------------------------\n");
+        sb.append("Total de expresiones encontradas: ").append(expresiones.size()).append("\n\n");
 
-        sb.append("► Infija   : ");
-        for (Tokens t : infija) sb.append(t.lexema).append(" ");
-        sb.append("\n");
+        for (ExpresionInfo exp : expresiones) {
+            List<Tokens> post = infijaAPosfija(exp.tokens);
+            List<String[]> cuadruplos = cuadruplosPostfijo(post);
+            double resultadoNum = evaluarPosfija(post, mapaValores);
 
-        sb.append("► Postfija : ");
-        for (Tokens t : post) sb.append(t.lexema).append(" ");
-        sb.append("\n");
+            sb.append("---------------------------------------------------------\n");
+            sb.append("Expresion #").append(exp.numero).append("   [Linea ").append(exp.linea).append("]\n");
+            sb.append("---------------------------------------------------------\n");
 
-        sb.append("► Resultado: ").append(resultadoNum).append("\n\n");
+            sb.append("Infija   : ");
+            for (Tokens t : exp.tokens) sb.append(t.lexema).append(" ");
+            sb.append("\n");
 
-        sb.append("CUÁDRUPLOS (Postfijo):\n");
-        sb.append(String.format("%-5s %-10s %-12s %-12s %-10s\n", "No.", "Operador", "Operando1", "Operando2", "Resultado"));
-        sb.append("---------------------------------------------------------\n");
+            sb.append("Postfija : ");
+            for (Tokens t : post) sb.append(t.lexema).append(" ");
+            sb.append("\n");
 
-        int num = 1;
-        for (String[] c : cuadruplos) {
-            sb.append(String.format("%-5d %-10s %-12s %-12s %-10s\n", num++, c[0], c[1], c[2], c[3]));
+            sb.append("Resultado: ").append(resultadoNum).append("\n\n");
+
+            sb.append("CUADRUPLOS (Postfijo):\n");
+            sb.append(String.format("%-5s %-10s %-12s %-12s %-10s\n", "No.", "Operador", "Operando1", "Operando2", "Resultado"));
+            sb.append("---------------------------------------------------------\n");
+
+            int num = 1;
+            for (String[] c : cuadruplos) {
+                sb.append(String.format("%-5d %-10s %-12s %-12s %-10s\n", num++, c[0], c[1], c[2], c[3]));
+            }
+            sb.append("---------------------------------------------------------\n\n");
         }
-        sb.append("---------------------------------------------------------\n");
         return sb.toString();
     }
 
-    public String generarReportePrefijo(List<Tokens> infija, int numExpresion, int linea, Map<String, Double> mapaValores) {
-        List<Tokens> pre = infijaAPrefija(infija);
-        List<Tokens> post = infijaAPosfija(infija);
-        List<String[]> cuadruplos = cuadruplosPrefija(pre);
-        double resultadoNum = evaluarPosfija(post, mapaValores);
-
+    public String generarReportePrefijo(List<ExpresionInfo> expresiones, Map<String, Double> mapaValores) {
         StringBuilder sb = new StringBuilder();
         sb.append("=========================================================\n");
-        sb.append("            CONVERSIÓN A NOTACIÓN PREFIJA                \n");
+        sb.append("            CONVERSION A NOTACION PREFIJA                \n");
         sb.append("=========================================================\n\n");
-        sb.append("Total de expresiones encontradas: 1\n\n");
-        sb.append("---------------------------------------------------------\n");
-        sb.append("Expresión #").append(numExpresion).append("   [Línea ").append(linea).append("]\n");
-        sb.append("---------------------------------------------------------\n");
+        sb.append("Total de expresiones encontradas: ").append(expresiones.size()).append("\n\n");
 
-        sb.append("► Infija   : ");
-        for (Tokens t : infija) sb.append(t.lexema).append(" ");
-        sb.append("\n");
+        for (ExpresionInfo exp : expresiones) {
+            List<Tokens> pre = infijaAPrefija(exp.tokens);
+            List<Tokens> post = infijaAPosfija(exp.tokens);
+            List<String[]> cuadruplos = cuadruplosPrefija(pre);
+            double resultadoNum = evaluarPosfija(post, mapaValores);
 
-        sb.append("► Prefija  : ");
-        for (Tokens t : pre) sb.append(t.lexema).append(" ");
-        sb.append("\n");
+            sb.append("---------------------------------------------------------\n");
+            sb.append("Expresion #").append(exp.numero).append("   [Linea ").append(exp.linea).append("]\n");
+            sb.append("---------------------------------------------------------\n");
 
-        sb.append("► Resultado: ").append(resultadoNum).append("\n\n");
+            sb.append("Infija   : ");
+            for (Tokens t : exp.tokens) sb.append(t.lexema).append(" ");
+            sb.append("\n");
 
-        sb.append("CUÁDRUPLOS (Prefijo):\n");
-        sb.append(String.format("%-5s %-10s %-12s %-12s %-10s\n", "No.", "Operador", "Operando1", "Operando2", "Resultado"));
-        sb.append("---------------------------------------------------------\n");
+            sb.append("Prefija  : ");
+            for (Tokens t : pre) sb.append(t.lexema).append(" ");
+            sb.append("\n");
 
-        int num = 1;
-        for (String[] c : cuadruplos) {
-            sb.append(String.format("%-5d %-10s %-12s %-12s %-10s\n", num++, c[0], c[1], c[2], c[3]));
+            sb.append("Resultado: ").append(resultadoNum).append("\n\n");
+
+            sb.append("CUADRUPLOS (Prefijo):\n");
+            sb.append(String.format("%-5s %-10s %-12s %-12s %-10s\n", "No.", "Operador", "Operando1", "Operando2", "Resultado"));
+            sb.append("---------------------------------------------------------\n");
+
+            int num = 1;
+            for (String[] c : cuadruplos) {
+                sb.append(String.format("%-5d %-10s %-12s %-12s %-10s\n", num++, c[0], c[1], c[2], c[3]));
+            }
+            sb.append("---------------------------------------------------------\n\n");
         }
-        sb.append("---------------------------------------------------------\n");
         return sb.toString();
     }
 }

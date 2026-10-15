@@ -67,10 +67,8 @@ public class AnalizadorSintactico {
     private void declaracionVariable() {
         Tokens palabraClave = anterior();
         boolean esConstante = (palabraClave.tipo == TipoToken.LET);
-
         Tokens idToken = consumir(TipoToken.IDENTIFIER, "Se esperaba el identificador de la variable.");
         String nombreVar = idToken.lexema;
-
         TipoToken tipoDato = null;
         if (coincide(TipoToken.COLON)) {
             if (coincide(TipoToken.TIPE_INT, TipoToken.TIPE_STRING, TipoToken.TIPE_DOUBLE, TipoToken.TIPE_BOOL)) {
@@ -80,18 +78,15 @@ public class AnalizadorSintactico {
                 throw new ParseError();
             }
         }
-
-        // VALIDACIÓN: No permitir redeclarar la misma variable (sin importar el tipo)
+        // No permitir redeclarar la misma variable (sin importar el tipo)
         if (tablaSimbolos.contiene(nombreVar)) {
             Simbolo previo = tablaSimbolos.buscar(nombreVar);
             error(idToken, "Error Semántico: La variable '" + nombreVar + "' ya fue declarada previamente (Línea " + previo.getLinea() + ").");
             throw new ParseError();
         }
-
         if (coincide(TipoToken.ASSIGN)) {
-            ResultadoExpresion res = expresion();
-            
-            // Si no se especificó tipo con ':', se infiere del valor
+            ResultadoExpresion res = expresion();      
+            // Si no se especifico tipo con ':', se infiere del valor
             if (tipoDato == null) {
                 tipoDato = res.getTipoDato();
             } else if (res.getTipoDato() != null && tipoDato != res.getTipoDato()) {
@@ -99,7 +94,6 @@ public class AnalizadorSintactico {
                         + res.getTipoDato() + "' a una variable de tipo '" + tipoDato + "'.");
                 throw new ParseError();
             }
-
             tablaSimbolos.insertar(new Simbolo(nombreVar, tipoDato, esConstante, idToken.linea));
             c3d.emitir(nombreVar + " = " + res.getLugar());
         } else {
@@ -119,7 +113,7 @@ public class AnalizadorSintactico {
         Tokens idToken = anterior();
         String nombreVar = idToken.lexema;
 
-        // VALIDACIÓN: Variable declarada y no constante
+        // Variable declarada y no constante
         Simbolo sim = tablaSimbolos.buscar(nombreVar);
         if (sim == null) {
             error(idToken, "Error Semántico: La variable '" + nombreVar + "' no ha sido declarada.");

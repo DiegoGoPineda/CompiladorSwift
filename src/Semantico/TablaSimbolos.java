@@ -8,7 +8,7 @@ public class TablaSimbolos {
 
     public boolean insertar(Simbolo simbolo) {
         if (tabla.containsKey(simbolo.getNombre())) {
-            return false; // Ya existe en la tabla (redeclaración)
+            return false; 
         }
         tabla.put(simbolo.getNombre(), simbolo);
         return true;
@@ -26,3 +26,6 @@ public class TablaSimbolos {
         tabla.clear();
     }
 }
+
+
+
