@@ -1,5 +1,6 @@
 import Intermedio.GeneradorNotaciones;
 import Intermedio.GeneradorNotaciones.ExpresionInfo;
+import Intermedio.OptimizadorCodigo;
 import Lexico.AnalizadorLexico;
 import Lexico.TipoToken;
 import Lexico.Tokens;
@@ -40,16 +41,18 @@ public class InterfazGrafica extends JFrame {
     private DefaultTableModel modeloTablaTokens;
     private JTextArea areaPrefija;
     private JTextArea areaPostfija;
+    private JTextArea areaCodigoOptimizado;
+    private JTextArea areaBitacora;
     private JTextArea areaConsola;
 
     public InterfazGrafica() {
-        super("Compilador Swift - Notaciones y Cuádruplos");
+        super("Compilador Swift - Notaciones, Cuádruplos y Optimización");
         this.configurarVentana();
         this.inicializarComponentes();
     }
 
     private void configurarVentana() {
-        this.setSize(1150, 720);
+        this.setSize(1200, 750);
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         this.setLocationRelativeTo(null);
         this.setLayout(new BorderLayout(10, 10));
@@ -116,6 +119,10 @@ public class InterfazGrafica extends JFrame {
             var b2: Double = 3.0
             var c2: Double = 4.0
 
+            if false {
+                print("Este bloque es codigo muerto")
+            }
+
             var x = ((g2 + h2) * 3.0) / ((a2 - b2) + (c2 * 2.0))
 
             var a: Int = 12
@@ -124,19 +131,13 @@ public class InterfazGrafica extends JFrame {
             var d: Int = 3
 
             var resultado = (a + b * c) / (d + 1)
-
-
-            var x1: Double = 20.0
-            var y1: Double = 5.0
-            var z1: Double = 2.0
-
-            var total = x1 / y1 + z1 * 4.0 - 3.0
             """);
         this.actualizarNumerosLinea();
 
-        // --- 3. PESTAÑAS DERECHAS (TOKENS, PREFIJA Y POSTFIJA) ---
+        // --- 3. PESTAÑAS DERECHAS (TOKENS, PREFIJA, POSTFIJA Y CÓDIGO OPTIMIZADO) ---
         JTabbedPane tabsSalida = new JTabbedPane();
 
+        // Pestaña 1: Tabla de Tokens
         String[] colTokens = new String[]{"Línea", "Tipo de Token", "Lexema", "Valor Semántico"};
         this.modeloTablaTokens = new DefaultTableModel(colTokens, 0) {
             public boolean isCellEditable(int fila, int columna) { return false; }
@@ -147,6 +148,7 @@ public class InterfazGrafica extends JFrame {
         JScrollPane scrollTablaTokens = new JScrollPane(this.tablaTokens);
         tabsSalida.addTab("Tabla de Tokens", scrollTablaTokens);
 
+        // Pestaña 2: Notación Prefija
         this.areaPrefija = new JTextArea();
         this.areaPrefija.setFont(new Font("Consolas", Font.PLAIN, 13));
         this.areaPrefija.setEditable(false);
@@ -154,12 +156,33 @@ public class InterfazGrafica extends JFrame {
         JScrollPane scrollPrefija = new JScrollPane(this.areaPrefija);
         tabsSalida.addTab("Notación Prefija", scrollPrefija);
 
+        // Pestaña 3: Notación Postfija
         this.areaPostfija = new JTextArea();
         this.areaPostfija.setFont(new Font("Consolas", Font.PLAIN, 13));
         this.areaPostfija.setEditable(false);
         this.areaPostfija.setBackground(new Color(250, 250, 250));
         JScrollPane scrollPostfija = new JScrollPane(this.areaPostfija);
         tabsSalida.addTab("Notación Postfija", scrollPostfija);
+
+        // Pestaña 4: Optimización (Eliminación de Código Muerto)
+        this.areaCodigoOptimizado = new JTextArea();
+        this.areaCodigoOptimizado.setFont(new Font("Consolas", Font.PLAIN, 13));
+        this.areaCodigoOptimizado.setEditable(false);
+        JScrollPane scrollOptimizado = new JScrollPane(this.areaCodigoOptimizado);
+        scrollOptimizado.setBorder(BorderFactory.createTitledBorder("Código Sin Código Muerto"));
+
+        this.areaBitacora = new JTextArea(8, 0);
+        this.areaBitacora.setFont(new Font("Consolas", Font.PLAIN, 12));
+        this.areaBitacora.setEditable(false);
+        this.areaBitacora.setBackground(new Color(245, 245, 245));
+        JScrollPane scrollBitacora = new JScrollPane(this.areaBitacora);
+        scrollBitacora.setBorder(BorderFactory.createTitledBorder("Bitácora de Optimización (Eliminaciones)"));
+
+        JPanel panelOptimizacion = new JPanel(new BorderLayout(5, 5));
+        panelOptimizacion.add(scrollOptimizado, BorderLayout.CENTER);
+        panelOptimizacion.add(scrollBitacora, BorderLayout.SOUTH);
+
+        tabsSalida.addTab("Código Optimizado", panelOptimizacion);
 
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, scrollEditor, tabsSalida);
         split.setResizeWeight(0.45D);
@@ -189,6 +212,8 @@ public class InterfazGrafica extends JFrame {
         this.modeloTablaTokens.setRowCount(0);
         this.areaPrefija.setText("");
         this.areaPostfija.setText("");
+        this.areaCodigoOptimizado.setText("");
+        this.areaBitacora.setText("");
         this.areaConsola.setText("");
 
         String codigo = this.areaCodigo.getText();
@@ -198,8 +223,11 @@ public class InterfazGrafica extends JFrame {
             return;
         }
 
+        // --- INICIO DE MEDICIÓN DE TIEMPO ---
+        long tiempoInicio = System.nanoTime();
+
         try {
-            // Fase Léxica
+            // 1. Fase Léxica
             AnalizadorLexico lexer = new AnalizadorLexico(codigo);
             List<Tokens> tokens = lexer.analizar();
 
@@ -209,7 +237,7 @@ public class InterfazGrafica extends JFrame {
                 });
             }
 
-            // Mapear los valores de variables declaradas numéricamente
+            // 2. Mapear los valores de variables declaradas numéricamente
             Map<String, Double> mapaValores = new HashMap<>();
             for (int i = 0; i < tokens.size() - 1; i++) {
                 if (tokens.get(i).tipo == TipoToken.IDENTIFIER) {
@@ -228,7 +256,7 @@ public class InterfazGrafica extends JFrame {
                 }
             }
 
-            // Detectar TODAS las expresiones compuestas (asignaciones con operadores o paréntesis)
+            // 3. Detectar expresiones compuestas
             List<ExpresionInfo> listaExpresiones = new ArrayList<>();
             int numExpr = 1;
 
@@ -256,7 +284,6 @@ public class InterfazGrafica extends JFrame {
                 }
             }
 
-            // Si no hay asignaciones complejas, tomar todo el bloque como una expresión
             if (listaExpresiones.isEmpty()) {
                 List<Tokens> expr = new ArrayList<>();
                 for (Tokens t : tokens) {
@@ -267,25 +294,44 @@ public class InterfazGrafica extends JFrame {
                 }
             }
 
-            // Fase Sintáctica y Semántica
+            // 4. Fase Sintáctica y Semántica
             AnalizadorSintactico parser = new AnalizadorSintactico(tokens);
             boolean esValido = parser.analizar();
             List<String> errores = parser.getListaErrores();
 
+            // --- FIN DE MEDICIÓN DE TIEMPO ---
+            long tiempoFin = System.nanoTime();
+            double milisegundos = (tiempoFin - tiempoInicio) / 1e6;
+
             if (esValido && errores.isEmpty()) {
                 this.areaConsola.setForeground(new Color(39, 174, 96));
-                this.areaConsola.setText("✔ COMPILACIÓN EXITOSA\n"
-                        + "• Léxico: " + tokens.size() + " tokens generados.\n"
-                        + "• Sintáctico: Estructura válida.\n"
-                        + "• Expresiones procesadas: " + listaExpresiones.size() + " encontradas.");
+                this.areaConsola.setText(String.format("✔ COMPILACIÓN EXITOSA (Tiempo de ejecución: %.3f ms)\n"
+                        + "• Léxico: %d tokens generados.\n"
+                        + "• Sintáctico y Semántico: Válidos.\n"
+                        + "• Expresiones procesadas: %d encontradas.\n"
+                        + "• Notaciones, Cuádruplos y Optimización generados.",
+                        milisegundos, tokens.size(), listaExpresiones.size()));
 
+                // Generar reportes
                 GeneradorNotaciones generador = new GeneradorNotaciones();
                 this.areaPostfija.setText(generador.generarReportePostfijo(listaExpresiones, mapaValores));
                 this.areaPrefija.setText(generador.generarReportePrefijo(listaExpresiones, mapaValores));
 
+                // Optimización de Código Muerto
+                OptimizadorCodigo optimizador = new OptimizadorCodigo();
+                OptimizadorCodigo.ResultadoOptimizacion optResult = optimizador.optimizar(codigo);
+
+                this.areaCodigoOptimizado.setText(optResult.getCodigoOptimizado());
+                
+                StringBuilder sbBitacora = new StringBuilder();
+                for (String cambio : optResult.getBitacoraCambios()) {
+                    sbBitacora.append("• ").append(cambio).append("\n");
+                }
+                this.areaBitacora.setText(sbBitacora.toString());
+
             } else {
                 this.areaConsola.setForeground(new Color(192, 57, 43));
-                StringBuilder mensajeErrores = new StringBuilder("✖ SE ENCONTRARON ERRORES:\n");
+                StringBuilder mensajeErrores = new StringBuilder(String.format("✖ SE ENCONTRARON ERRORES (Tiempo: %.3f ms):\n", milisegundos));
                 for (String err : errores) {
                     mensajeErrores.append(err).append("\n");
                 }
