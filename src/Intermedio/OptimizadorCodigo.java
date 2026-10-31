@@ -4,6 +4,7 @@ import Lexico.Tokens;
 import java.util.ArrayList;
 import java.util.List;
 
+
 public class OptimizadorCodigo {
 
     public static class ResultadoOptimizacion {
@@ -39,7 +40,7 @@ public class OptimizadorCodigo {
                 continue;
             }
 
-            // A) ELIMINACIÓN DE CÓDIGO MUERTO (if false / while false)
+            // cuando hay while o ifs que dan false
             if (lineaTrimmed.matches(".*\\b(if|while)\\s+false\\b.*")) {
                 enBloqueMuerto = true;
                 nivelLlaves = 0;
@@ -63,7 +64,7 @@ public class OptimizadorCodigo {
                 continue;
             }
 
-            // B) ELIMINACIÓN DE CÓDIGO INALCANZABLE TRAS RETORNO DE CARRO (return / break / continue)
+            // cuando hay break, return 
             if (trasRetorno) {
                 if (lineaTrimmed.equals("}")) {
                     trasRetorno = false;

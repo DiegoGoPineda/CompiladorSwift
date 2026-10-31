@@ -113,24 +113,63 @@ public class InterfazGrafica extends JFrame {
         scrollEditor.setBorder(BorderFactory.createTitledBorder("Código Fuente Swift"));
 
         this.areaCodigo.setText("""
+ 
+            // prueba de código muerto y optimización
+            
             var g2: Double = 10.0
             var h2: Double = 5.0
             var a2: Double = 8.0
             var b2: Double = 3.0
             var c2: Double = 4.0
 
-            if false {
-                print("Este bloque es codigo muerto")
-            }
-
-            var x = ((g2 + h2) * 3.0) / ((a2 - b2) + (c2 * 2.0))
-
             var a: Int = 12
             var b: Int = 4
             var c: Int = 2
             var d: Int = 3
 
+            // if false 
+            if false {
+                print("Este bloque es código muerto y será eliminado por el optimizador.")
+            }
+
+            var x = ((g2 + h2) * 3.0) / ((a2 - b2) + (c2 * 2.0))
             var resultado = (a + b * c) / (d + 1)
+
+            // ciclo while muelto
+            var contador: Int = 0
+            var limite: Int = 10
+
+            print("Inicio del programa principal")
+
+            while false {
+                print("Iteración fantasma del bucle while (código muerto)")
+                contador = contador + 1
+            }
+
+            var resultadoFinal = limite * 2
+            print("El resultado es: ")
+
+            // con break y return
+            var index: Int = 0
+
+            while index < 5 {
+                print("Valor del índice: "
+
+                if index == 2 {
+                    print("Llegó al límite, saliendo del bucle.")
+                    break
+
+                    // Código inalcanzable después del break (detectado por el optimizador)
+                    var variableInutil: Int = 9999
+                    print("Esto nunca se imprime después del break")
+                }
+
+                index = index + 1
+            }
+
+            print("Bucle finalizado correctamente.")
+
+
             """);
         this.actualizarNumerosLinea();
 
