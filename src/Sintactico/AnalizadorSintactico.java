@@ -34,7 +34,6 @@ public class AnalizadorSintactico {
         return tablaSimbolos; 
     }
 
-    // Punto de entrada: permite encontrar múltiples errores reales sin trabarse
     public boolean analizar() {
         while (!esFin()) {
             declaracion();
@@ -52,6 +51,10 @@ public class AnalizadorSintactico {
                 sentenciaWhile();
             } else if (coincide(TipoToken.PRINT)) {
                 sentenciaPrint();
+            } else if (coincide(TipoToken.RETURN)) {
+                sentenciaReturn();
+            } else if (coincide(TipoToken.BREAK, TipoToken.CONTINUE)) {
+                c3d.emitir(anterior().lexema);
             } else if (coincide(TipoToken.IDENTIFIER)) {
                 asignacion();
             } else {
@@ -63,7 +66,6 @@ public class AnalizadorSintactico {
         }
     }
 
-    // 1. Validar duplicación de variables
     private void declaracionVariable() {
         Tokens palabraClave = anterior();
         boolean esConstante = (palabraClave.tipo == TipoToken.LET);
@@ -78,7 +80,6 @@ public class AnalizadorSintactico {
                 throw new ParseError();
             }
         }
-        // No permitir redeclarar la misma variable (sin importar el tipo)
         if (tablaSimbolos.contiene(nombreVar)) {
             Simbolo previo = tablaSimbolos.buscar(nombreVar);
             error(idToken, "Error Semántico: La variable '" + nombreVar + "' ya fue declarada previamente (Línea " + previo.getLinea() + ").");
@@ -86,7 +87,6 @@ public class AnalizadorSintactico {
         }
         if (coincide(TipoToken.ASSIGN)) {
             ResultadoExpresion res = expresion();      
-            // Si no se especifico tipo con ':', se infiere del valor
             if (tipoDato == null) {
                 tipoDato = res.getTipoDato();
             } else if (res.getTipoDato() != null && tipoDato != res.getTipoDato()) {
@@ -113,7 +113,6 @@ public class AnalizadorSintactico {
         Tokens idToken = anterior();
         String nombreVar = idToken.lexema;
 
-        // Variable declarada y no constante
         Simbolo sim = tablaSimbolos.buscar(nombreVar);
         if (sim == null) {
             error(idToken, "Error Semántico: La variable '" + nombreVar + "' no ha sido declarada.");
@@ -194,7 +193,6 @@ public class AnalizadorSintactico {
         c3d.emitirEtiqueta(etiquetaFin);
     }
 
-    // 2. Validar que la variable a imprimir exista
     private void sentenciaPrint() {
         consumir(TipoToken.LPAREN, "Se esperaba '(' después de 'print'.");
         ResultadoExpresion valorImprimir = expresion();
@@ -204,13 +202,25 @@ public class AnalizadorSintactico {
         c3d.emitir("call print, 1");
     }
 
+    private void sentenciaReturn() {
+        Tokens tokenReturn = anterior();
+        if (!revisar(TipoToken.RBRACE) && !esFin() && mirar().linea == tokenReturn.linea) {
+            try {
+                ResultadoExpresion res = expresion();
+                c3d.emitir("return " + res.getLugar());
+            } catch (Exception e) {
+                c3d.emitir("return");
+            }
+        } else {
+            c3d.emitir("return");
+        }
+    }
+
     private void bloque() {
         while (!revisar(TipoToken.RBRACE) && !esFin()) {
             declaracion();
         }
     }
-
-    // --- JERARQUÍA DE EXPRESIONES Y TYPE-CHECKING ESTRICTO ---
 
     private ResultadoExpresion expresion() {
         return comparacion();
@@ -223,10 +233,7 @@ public class AnalizadorSintactico {
             Tokens op = anterior();
             ResultadoExpresion der = termino();
 
-            // Validación semántica en comparaciones:
-            // No comparar String con Int, ni Bool con números
             if (izq.getTipoDato() != der.getTipoDato()) {
-                // Permitir Int con Double
                 boolean numCompatibles = (izq.getTipoDato() == TipoToken.TIPE_INT && der.getTipoDato() == TipoToken.TIPE_DOUBLE) ||
                                          (izq.getTipoDato() == TipoToken.TIPE_DOUBLE && der.getTipoDato() == TipoToken.TIPE_INT);
                 if (!numCompatibles) {
@@ -243,7 +250,6 @@ public class AnalizadorSintactico {
         return izq;
     }
 
-    // 1. Validar suma y resta estricta (no permitir String + Int, ni restar String)
     private ResultadoExpresion termino() {
         ResultadoExpresion izq = factor();
         while (coincide(TipoToken.PLUS, TipoToken.MINUS)) {
@@ -258,7 +264,7 @@ public class AnalizadorSintactico {
                 } else if (izq.getTipoDato() == TipoToken.TIPE_DOUBLE && der.getTipoDato() == TipoToken.TIPE_DOUBLE) {
                     tipoFinal = TipoToken.TIPE_DOUBLE;
                 } else if (izq.getTipoDato() == TipoToken.TIPE_STRING && der.getTipoDato() == TipoToken.TIPE_STRING) {
-                    tipoFinal = TipoToken.TIPE_STRING; // Concatenación
+                    tipoFinal = TipoToken.TIPE_STRING;
                 } else {
                     error(op, "Error Semántico: Swift no permite el operador '+' entre tipos distintos ('" 
                             + izq.getTipoDato() + "' y '" + der.getTipoDato() + "'). Se requiere el mismo tipo.");
@@ -322,7 +328,6 @@ public class AnalizadorSintactico {
             return new ResultadoExpresion(anterior().lexema, TipoToken.TIPE_BOOL);
         }
 
-        // VALIDACIÓN: Variable existe en la tabla de símbolos
         if (coincide(TipoToken.IDENTIFIER)) {
             Tokens idToken = anterior();
             Simbolo sim = tablaSimbolos.buscar(idToken.lexema);
@@ -342,8 +347,6 @@ public class AnalizadorSintactico {
         error(mirar(), "Se esperaba un literal, identificador o '(' pero se encontró '" + mirar().lexema + "'.");
         throw new ParseError();
     }
-
-    // --- MÉTODOS DE NAVEGACIÓN Y RECUPERACIÓN INTELIGENTE ---
 
     private boolean coincide(TipoToken... tipos) {
         for (TipoToken tipo : tipos) {
@@ -390,7 +393,6 @@ public class AnalizadorSintactico {
         listaErrores.add(detalle);
     }
 
-    // Modo Pánico Inteligente: Salta hasta encontrar el inicio de otra sentencia real
     private void sincronizar() {
         avanzar();
         while (!esFin()) {
@@ -402,6 +404,9 @@ public class AnalizadorSintactico {
                 case IF:
                 case WHILE:
                 case PRINT:
+                case RETURN:
+                case BREAK:
+                case CONTINUE:
                     return;
                 default:
                     avanzar();

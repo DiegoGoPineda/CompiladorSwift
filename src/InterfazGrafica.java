@@ -319,7 +319,7 @@ public class InterfazGrafica extends JFrame {
 
                 // Optimización de Código Muerto
                 OptimizadorCodigo optimizador = new OptimizadorCodigo();
-                OptimizadorCodigo.ResultadoOptimizacion optResult = optimizador.optimizar(codigo);
+                OptimizadorCodigo.ResultadoOptimizacion optResult = optimizador.optimizar(codigo, tokens);
 
                 this.areaCodigoOptimizado.setText(optResult.getCodigoOptimizado());
                 

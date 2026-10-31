@@ -11,7 +11,6 @@ public class AnalizadorLexico {
     private int posicion;
     private int linea;
 
-    // Diccionario para palabras reservadas
     private static final Map<String, TipoToken> PALABRAS_RESERVADAS = new HashMap<>();
     static {
         PALABRAS_RESERVADAS.put("let", TipoToken.LET);
@@ -26,6 +25,9 @@ public class AnalizadorLexico {
         PALABRAS_RESERVADAS.put("Bool", TipoToken.TIPE_BOOL);
         PALABRAS_RESERVADAS.put("true", TipoToken.BOOLEAN_LITERAL);
         PALABRAS_RESERVADAS.put("false", TipoToken.BOOLEAN_LITERAL);
+        PALABRAS_RESERVADAS.put("return", TipoToken.RETURN);
+        PALABRAS_RESERVADAS.put("break", TipoToken.BREAK);
+        PALABRAS_RESERVADAS.put("continue", TipoToken.CONTINUE);
     }
 
     public AnalizadorLexico(String entrada) {
@@ -39,34 +41,31 @@ public class AnalizadorLexico {
         int n = entrada.length();
 
         while (posicion < n) {
-            int estado = 0; // Regresa al estado inicial para cada token
+            int estado = 0;
             StringBuilder lexema = new StringBuilder();
 
             while (posicion < n) {
                 char c = entrada.charAt(posicion);
 
                 switch (estado) {
-                    case 0: // ESTADO INICIAL
+                    case 0:
                         if (c == ' ' || c == '\t' || c == '\r') {
-                            posicion++; // Ignorar espacios en blanco
+                            posicion++;
                         } else if (c == '\n') {
                             linea++;
                             posicion++;
                         } else if (esDigito(c)) { 
-                            // 1. PRIORIDAD: Evaluar números primero
                             lexema.append(c);
                             posicion++;
-                            estado = 2; // Transición a número entero
+                            estado = 2;
                         } else if (esInicioDeIdentificador(c)) { 
-                            // 2. Solo letras/subguión/caracteres extendidos para iniciar identificador
                             lexema.append(c);
                             posicion++;
-                            estado = 1; // Transición a identificador / palabra reservada
+                            estado = 1;
                         } else if (c == '"') {
-                            posicion++; // No incluimos la comilla inicial en el valor
-                            estado = 4; // Transición a cadena
+                            posicion++;
+                            estado = 4;
                         } else if (c == '/') {
-                            // Revisar si es comentario de una línea //
                             if (posicion + 1 < n && entrada.charAt(posicion + 1) == '/') {
                                 while (posicion < n && entrada.charAt(posicion) != '\n') {
                                     posicion++;
@@ -140,19 +139,16 @@ public class AnalizadorLexico {
                         }
                         break;
 
-                    case 1: // ESTADO DE IDENTIFICADORES Y PALABRAS RESERVADAS (CON VALIDACIÓN)
+                    case 1:
                         if (esContinuacionDeIdentificador(c)) {
                             lexema.append(c);
                             posicion++;
                         } else {
                             String texto = lexema.toString();
-
-                            // Si contiene un carácter fuera del alfabeto válido
                             if (contieneCaracterInvalido(texto)) {
                                 listaTokens.add(new Tokens(TipoToken.UNKNOWN, texto, linea));
                             } else {
                                 TipoToken tipo = PALABRAS_RESERVADAS.get(texto);
-
                                 if (tipo == null) {
                                     listaTokens.add(new Tokens(TipoToken.IDENTIFIER, texto, linea));
                                 } else if (tipo == TipoToken.BOOLEAN_LITERAL) {
@@ -161,21 +157,20 @@ public class AnalizadorLexico {
                                     listaTokens.add(new Tokens(tipo, texto, linea));
                                 }
                             }
-                            estado = 0; // Termina este token
+                            estado = 0;
                             break;
                         }
                         break;
 
-                    case 2: // ESTADO: ENTEROS
+                    case 2:
                         if (esDigito(c)) {
                             lexema.append(c);
                             posicion++;
                         } else if (c == '.' && posicion + 1 < n && esDigito(entrada.charAt(posicion + 1))) {
                             lexema.append(c);
                             posicion++;
-                            estado = 3; // Pasa a estado de número decimal
+                            estado = 3;
                         } else {
-                            // Aceptación de entero
                             String texto = lexema.toString();
                             listaTokens.add(new Tokens(TipoToken.NUMBER_INT, texto, Integer.parseInt(texto), linea));
                             estado = 0;
@@ -183,12 +178,11 @@ public class AnalizadorLexico {
                         }
                         break;
 
-                    case 3: // ESTADO DE ACEPTACIÓN: DECIMALES
+                    case 3:
                         if (esDigito(c)) {
                             lexema.append(c);
                             posicion++;
                         } else {
-                            // Aceptación de double
                             String texto = lexema.toString();
                             listaTokens.add(new Tokens(TipoToken.NUMBER_DOUBLE, texto, Double.parseDouble(texto), linea));
                             estado = 0;
@@ -196,9 +190,9 @@ public class AnalizadorLexico {
                         }
                         break;
 
-                    case 4: // ESTADO: CADENAS LITERALES
+                    case 4:
                         if (c == '"') {
-                            posicion++; // Consumir comilla de cierre
+                            posicion++;
                             String texto = lexema.toString();
                             listaTokens.add(new Tokens(TipoToken.STRING_LITERAL, texto, texto, linea));
                             estado = 0;
@@ -214,13 +208,11 @@ public class AnalizadorLexico {
                         break;
                 }
 
-                // Si volvió a estado 0 habiendo consumido un token compuesto, salimos al ciclo principal
                 if (estado == 0 && lexema.length() > 0) {
                     break;
                 }
             }
 
-            // Manejo de fin de cadena sin cerrar comillas
             if (estado == 4) {
                 listaTokens.add(new Tokens(TipoToken.UNKNOWN, lexema.toString(), linea));
             }
@@ -230,17 +222,14 @@ public class AnalizadorLexico {
         return listaTokens;
     }
 
-    // Un identificador NO puede empezar con números
     private boolean esInicioDeIdentificador(char c) {
         return esLetraValida(c) || Character.isLetter(c);
     }
 
-    // Durante la lectura del identificador se aceptan letras, números y caracteres no válidos pegados
     private boolean esContinuacionDeIdentificador(char c) {
         return esLetraValida(c) || esDigito(c) || Character.isLetter(c);
     }
 
-    // Verifica si la palabra acumulada tiene algún carácter fuera del alfabeto válido (ASCII de Swift)
     private boolean contieneCaracterInvalido(String texto) {
         for (int i = 0; i < texto.length(); i++) {
             char c = texto.charAt(i);

@@ -17,5 +17,7 @@ public enum TipoToken {
     LPAREN, RPAREN, LBRACE, RBRACE, COLON, COMMA,
 
     // Controles
-    EOF, UNKNOWN
+    EOF, UNKNOWN,
+
+    RETURN, BREAK, CONTINUE
 }
