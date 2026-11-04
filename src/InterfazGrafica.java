@@ -62,7 +62,7 @@ public class InterfazGrafica extends JFrame {
         // --- 1. BARRA SUPERIOR DE ACCIONES ---
         JPanel panelSuperior = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
 
-        JButton btnCompilar = new JButton("▶ Compilar / Analizar");
+        JButton btnCompilar = new JButton("▶ Compilar Original");
         btnCompilar.setFont(new Font("Segoe UI", Font.BOLD, 13));
         btnCompilar.setBackground(new Color(24, 43, 73));
         btnCompilar.setForeground(Color.WHITE);
@@ -70,7 +70,17 @@ public class InterfazGrafica extends JFrame {
         btnCompilar.setBorderPainted(false);
         btnCompilar.setFocusPainted(false);
         btnCompilar.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        btnCompilar.addActionListener((e) -> this.ejecutarAnalisis());
+        btnCompilar.addActionListener((e) -> this.ejecutarAnalisis(this.areaCodigo.getText(), false));
+
+        JButton btnRecompilarOptimizado = new JButton("🔄 Re-compilar Código Optimizado");
+        btnRecompilarOptimizado.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btnRecompilarOptimizado.setBackground(new Color(39, 174, 96));
+        btnRecompilarOptimizado.setForeground(Color.WHITE);
+        btnRecompilarOptimizado.setOpaque(true);
+        btnRecompilarOptimizado.setBorderPainted(false);
+        btnRecompilarOptimizado.setFocusPainted(false);
+        btnRecompilarOptimizado.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnRecompilarOptimizado.addActionListener((e) -> this.recompilarOptimizado());
 
         JButton btnAbrir = new JButton("📂 Abrir .swift");
         btnAbrir.setFont(new Font("Segoe UI", Font.PLAIN, 12));
@@ -83,11 +93,12 @@ public class InterfazGrafica extends JFrame {
         btnGuardar.addActionListener((e) -> this.guardarArchivoSwift());
 
         panelSuperior.add(btnCompilar);
+        panelSuperior.add(btnRecompilarOptimizado);
         panelSuperior.add(btnAbrir);
         panelSuperior.add(btnGuardar);
         this.add(panelSuperior, BorderLayout.NORTH);
 
-        // --- 2. EDITOR DE CÓDIGO CON NÚMEROS DE LÍNEA ---
+        // --- 2. EDITOR PRINCIPAL ---
         this.areaCodigo = new JTextArea();
         this.areaCodigo.setFont(new Font("Consolas", Font.PLAIN, 14));
 
@@ -113,70 +124,36 @@ public class InterfazGrafica extends JFrame {
         scrollEditor.setBorder(BorderFactory.createTitledBorder("Código Fuente Swift"));
 
         this.areaCodigo.setText("""
- 
-            // prueba de código muerto y optimización
-            
             var g2: Double = 10.0
             var h2: Double = 5.0
             var a2: Double = 8.0
             var b2: Double = 3.0
             var c2: Double = 4.0
 
+            if false {
+                print("Este bloque es codigo muerto")
+            }
+
+            var x = ((g2 + h2) * 3.0) / ((a2 - b2) + (c2 * 2.0))
+
             var a: Int = 12
             var b: Int = 4
             var c: Int = 2
             var d: Int = 3
 
-            // if false 
-            if false {
-                print("Este bloque es código muerto y será eliminado por el optimizador.")
-            }
-
-            var x = ((g2 + h2) * 3.0) / ((a2 - b2) + (c2 * 2.0))
             var resultado = (a + b * c) / (d + 1)
+            
+            print("Operaciones completadas")
+            return
 
-            // ciclo while muelto
-            var contador: Int = 0
-            var limite: Int = 10
-
-            print("Inicio del programa principal")
-
-            while false {
-                print("Iteración fantasma del bucle while (código muerto)")
-                contador = contador + 1
-            }
-
-            var resultadoFinal = limite * 2
-            print("El resultado es: ")
-
-            // con break y return
-            var index: Int = 0
-
-            while index < 5 {
-                print("Valor del índice: "
-
-                if index == 2 {
-                    print("Llegó al límite, saliendo del bucle.")
-                    break
-
-                    // Código inalcanzable después del break (detectado por el optimizador)
-                    var variableInutil: Int = 9999
-                    print("Esto nunca se imprime después del break")
-                }
-
-                index = index + 1
-            }
-
-            print("Bucle finalizado correctamente.")
-
-
+            var z1: Double = 100.0
+            print("Linea inalcanzable tras return")
             """);
         this.actualizarNumerosLinea();
 
-        // --- 3. PESTAÑAS DERECHAS (TOKENS, PREFIJA, POSTFIJA Y CÓDIGO OPTIMIZADO) ---
+        // --- 3. PESTAÑAS DE SALIDA ---
         JTabbedPane tabsSalida = new JTabbedPane();
 
-        // Pestaña 1: Tabla de Tokens
         String[] colTokens = new String[]{"Línea", "Tipo de Token", "Lexema", "Valor Semántico"};
         this.modeloTablaTokens = new DefaultTableModel(colTokens, 0) {
             public boolean isCellEditable(int fila, int columna) { return false; }
@@ -187,7 +164,6 @@ public class InterfazGrafica extends JFrame {
         JScrollPane scrollTablaTokens = new JScrollPane(this.tablaTokens);
         tabsSalida.addTab("Tabla de Tokens", scrollTablaTokens);
 
-        // Pestaña 2: Notación Prefija
         this.areaPrefija = new JTextArea();
         this.areaPrefija.setFont(new Font("Consolas", Font.PLAIN, 13));
         this.areaPrefija.setEditable(false);
@@ -195,7 +171,6 @@ public class InterfazGrafica extends JFrame {
         JScrollPane scrollPrefija = new JScrollPane(this.areaPrefija);
         tabsSalida.addTab("Notación Prefija", scrollPrefija);
 
-        // Pestaña 3: Notación Postfija
         this.areaPostfija = new JTextArea();
         this.areaPostfija.setFont(new Font("Consolas", Font.PLAIN, 13));
         this.areaPostfija.setEditable(false);
@@ -203,7 +178,6 @@ public class InterfazGrafica extends JFrame {
         JScrollPane scrollPostfija = new JScrollPane(this.areaPostfija);
         tabsSalida.addTab("Notación Postfija", scrollPostfija);
 
-        // Pestaña 4: Optimización (Eliminación de Código Muerto)
         this.areaCodigoOptimizado = new JTextArea();
         this.areaCodigoOptimizado.setFont(new Font("Consolas", Font.PLAIN, 13));
         this.areaCodigoOptimizado.setEditable(false);
@@ -215,7 +189,7 @@ public class InterfazGrafica extends JFrame {
         this.areaBitacora.setEditable(false);
         this.areaBitacora.setBackground(new Color(245, 245, 245));
         JScrollPane scrollBitacora = new JScrollPane(this.areaBitacora);
-        scrollBitacora.setBorder(BorderFactory.createTitledBorder("Bitácora de Optimización (Eliminaciones)"));
+        scrollBitacora.setBorder(BorderFactory.createTitledBorder("Bitácora de Optimización y Re-compilación"));
 
         JPanel panelOptimizacion = new JPanel(new BorderLayout(5, 5));
         panelOptimizacion.add(scrollOptimizado, BorderLayout.CENTER);
@@ -247,27 +221,42 @@ public class InterfazGrafica extends JFrame {
         areaNumerosLinea.setText(sb.toString());
     }
 
-    private void ejecutarAnalisis() {
+    private void recompilarOptimizado() {
+        String codigoOpt = this.areaCodigoOptimizado.getText();
+        if (codigoOpt.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Primero debes compilar el código original para generar el código optimizado.", "Atención", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        // Reemplaza el contenido del editor por el código optimizado
+        this.areaCodigo.setText(codigoOpt);
+        this.actualizarNumerosLinea();
+        
+        // Compila nuevamente el código que ya quedó limpio en el editor
+        ejecutarAnalisis(codigoOpt, true);
+    }
+
+    private void ejecutarAnalisis(String codigoFuente, boolean esRecompilacion) {
         this.modeloTablaTokens.setRowCount(0);
         this.areaPrefija.setText("");
         this.areaPostfija.setText("");
-        this.areaCodigoOptimizado.setText("");
-        this.areaBitacora.setText("");
+        if (!esRecompilacion) {
+            this.areaCodigoOptimizado.setText("");
+            this.areaBitacora.setText("");
+        }
         this.areaConsola.setText("");
 
-        String codigo = this.areaCodigo.getText();
-        if (codigo.trim().isEmpty()) {
+        if (codigoFuente.trim().isEmpty()) {
             this.areaConsola.setForeground(Color.BLACK);
             this.areaConsola.setText("El editor está vacío. Ingresa código Swift para evaluar.");
             return;
         }
 
-        // --- INICIO DE MEDICIÓN DE TIEMPO ---
         long tiempoInicio = System.nanoTime();
 
         try {
             // 1. Fase Léxica
-            AnalizadorLexico lexer = new AnalizadorLexico(codigo);
+            AnalizadorLexico lexer = new AnalizadorLexico(codigoFuente);
             List<Tokens> tokens = lexer.analizar();
 
             for (Tokens t : tokens) {
@@ -276,7 +265,6 @@ public class InterfazGrafica extends JFrame {
                 });
             }
 
-            // 2. Mapear los valores de variables declaradas numéricamente
             Map<String, Double> mapaValores = new HashMap<>();
             for (int i = 0; i < tokens.size() - 1; i++) {
                 if (tokens.get(i).tipo == TipoToken.IDENTIFIER) {
@@ -295,7 +283,6 @@ public class InterfazGrafica extends JFrame {
                 }
             }
 
-            // 3. Detectar expresiones compuestas
             List<ExpresionInfo> listaExpresiones = new ArrayList<>();
             int numExpr = 1;
 
@@ -333,40 +320,51 @@ public class InterfazGrafica extends JFrame {
                 }
             }
 
-            // 4. Fase Sintáctica y Semántica
+            // 2. Fase Sintáctica y Semántica
             AnalizadorSintactico parser = new AnalizadorSintactico(tokens);
             boolean esValido = parser.analizar();
             List<String> errores = parser.getListaErrores();
 
-            // --- FIN DE MEDICIÓN DE TIEMPO ---
             long tiempoFin = System.nanoTime();
             double milisegundos = (tiempoFin - tiempoInicio) / 1e6;
 
             if (esValido && errores.isEmpty()) {
+                String prefijoConsola = esRecompilacion ? "✔ RE-COMPILACIÓN DE CÓDIGO OPTIMIZADO EXITOSA" : "✔ COMPILACIÓN EXITOSA";
                 this.areaConsola.setForeground(new Color(39, 174, 96));
-                this.areaConsola.setText(String.format("✔ COMPILACIÓN EXITOSA (Tiempo de ejecución: %.3f ms)\n"
+                this.areaConsola.setText(String.format("%s (Tiempo: %.3f ms)\n"
                         + "• Léxico: %d tokens generados.\n"
-                        + "• Sintáctico y Semántico: Válidos.\n"
+                        + "• Sintáctico y Semántico: Válidos (0 errores).\n"
                         + "• Expresiones procesadas: %d encontradas.\n"
-                        + "• Notaciones, Cuádruplos y Optimización generados.",
-                        milisegundos, tokens.size(), listaExpresiones.size()));
+                        + "• Notaciones y Cuádruplos actualizados para este código.",
+                        prefijoConsola, milisegundos, tokens.size(), listaExpresiones.size()));
 
-                // Generar reportes
                 GeneradorNotaciones generador = new GeneradorNotaciones();
                 this.areaPostfija.setText(generador.generarReportePostfijo(listaExpresiones, mapaValores));
                 this.areaPrefija.setText(generador.generarReportePrefijo(listaExpresiones, mapaValores));
 
-                // Optimización de Código Muerto
-                OptimizadorCodigo optimizador = new OptimizadorCodigo();
-                OptimizadorCodigo.ResultadoOptimizacion optResult = optimizador.optimizar(codigo, tokens);
+                // 3. Si es la primera compilación, generamos el código optimizado y guardamos el archivo .swift
+                if (!esRecompilacion) {
+                    OptimizadorCodigo optimizador = new OptimizadorCodigo();
+                    OptimizadorCodigo.ResultadoOptimizacion optResult = optimizador.optimizar(codigoFuente, tokens);
 
-                this.areaCodigoOptimizado.setText(optResult.getCodigoOptimizado());
-                
-                StringBuilder sbBitacora = new StringBuilder();
-                for (String cambio : optResult.getBitacoraCambios()) {
-                    sbBitacora.append("• ").append(cambio).append("\n");
+                    String codigoNuevo = optResult.getCodigoOptimizado();
+                    this.areaCodigoOptimizado.setText(codigoNuevo);
+
+                    try {
+                        File archivoOpt = new File("codigo_optimizado.swift");
+                        Files.writeString(archivoOpt.toPath(), codigoNuevo);
+                    } catch (Exception ignored) {}
+
+                    StringBuilder sbBitacora = new StringBuilder();
+                    sbBitacora.append("✔ Archivo generado automáticamente: 'codigo_optimizado.swift'\n\n");
+                    sbBitacora.append("=== BITÁCORA DE OPTIMIZACIÓN DE CÓDIGO MUERTO ===\n");
+                    for (String cambio : optResult.getBitacoraCambios()) {
+                        sbBitacora.append("• ").append(cambio).append("\n");
+                    }
+                    this.areaBitacora.setText(sbBitacora.toString());
+                } else {
+                    this.areaBitacora.append("\n✔ [RE-COMPILACIÓN EJECUTADA CON ÉXITO A LAS " + java.time.LocalTime.now().toString().substring(0, 8) + "]");
                 }
-                this.areaBitacora.setText(sbBitacora.toString());
 
             } else {
                 this.areaConsola.setForeground(new Color(192, 57, 43));
