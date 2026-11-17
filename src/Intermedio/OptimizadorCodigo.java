@@ -25,7 +25,7 @@ public class OptimizadorCodigo {
     public ResultadoOptimizacion optimizar(String codigoOriginal, List<Tokens> tokens) {
         List<String> bitacora = new ArrayList<>();
 
-        // Map para almacenar el valor en String formateado respetando si es Double (10.0) o Int (10)
+        // con esto se guarda el valor
         Map<String, String> mapaValoresTexto = new HashMap<>();
         Map<String, Double> mapaValoresNum = new HashMap<>();
 
@@ -61,7 +61,7 @@ public class OptimizadorCodigo {
             String lineaOriginal = lineas[i];
             String lineaTrimmed = lineaOriginal.trim();
 
-            // A) ELIMINACIÓN DE ESPACIOS EN BLANCO Y COMENTARIOS
+            // espacios en blanco y comentarios
             if (lineaTrimmed.isEmpty()) {
                 bitacora.add("[Código Muerto] Línea " + (i + 1) + ": Se eliminó espacio en blanco inservible.");
                 continue;
@@ -72,13 +72,13 @@ public class OptimizadorCodigo {
                 continue;
             }
 
-            // B) RETORNOS DE CARRO (Código inalcanzable tras return)
+            // el return
             if (trasSalidaGlobal) {
                 bitacora.add("[Código Muerto - Retorno de Carro] Línea " + (i + 1) + ": Instrucción inalcanzable tras salida omitida ('" + lineaTrimmed + "').");
                 continue;
             }
 
-            // C) CONDICIONES IMPOSIBLES (if false, if b == 5)
+            // cuando da false
             boolean esCondicionFalsa = false;
             if (lineaTrimmed.matches(".*\\b(if|while)\\s+false\\b.*")) {
                 esCondicionFalsa = true;
@@ -128,7 +128,7 @@ public class OptimizadorCodigo {
                 continue;
             }
 
-            // D) OPTIMIZACIÓN LOCAL: Propagación de constantes respetando tipos exactos
+            // remplazar variables por sus valores constantes
             String lineaModificada = lineaOriginal;
             if (lineaTrimmed.startsWith("var ") || lineaTrimmed.startsWith("let ")) {
                 if (lineaTrimmed.contains("=") && !lineaTrimmed.contains("print")) {

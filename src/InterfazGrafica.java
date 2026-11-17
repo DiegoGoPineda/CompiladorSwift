@@ -59,7 +59,7 @@ public class InterfazGrafica extends JFrame {
     }
 
     private void inicializarComponentes() {
-        // --- 1. BARRA SUPERIOR DE ACCIONES ---
+        // acciones
         JPanel panelSuperior = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
 
         JButton btnCompilar = new JButton("▶ Compilar Original");
@@ -98,7 +98,7 @@ public class InterfazGrafica extends JFrame {
         panelSuperior.add(btnGuardar);
         this.add(panelSuperior, BorderLayout.NORTH);
 
-        // --- 2. EDITOR PRINCIPAL ---
+        //editor
         this.areaCodigo = new JTextArea();
         this.areaCodigo.setFont(new Font("Consolas", Font.PLAIN, 14));
 
@@ -151,7 +151,7 @@ public class InterfazGrafica extends JFrame {
             """);
         this.actualizarNumerosLinea();
 
-        // --- 3. PESTAÑAS DE SALIDA ---
+        // Salida
         JTabbedPane tabsSalida = new JTabbedPane();
 
         String[] colTokens = new String[]{"Línea", "Tipo de Token", "Lexema", "Valor Semántico"};
@@ -356,19 +356,19 @@ public class InterfazGrafica extends JFrame {
                     } catch (Exception ignored) {}
 
                     StringBuilder sbBitacora = new StringBuilder();
-                    sbBitacora.append("✔ Archivo generado automáticamente: 'codigo_optimizado.swift'\n\n");
-                    sbBitacora.append("=== BITÁCORA DE OPTIMIZACIÓN DE CÓDIGO MUERTO ===\n");
+                    sbBitacora.append("Archivo generado automáticamente: 'codigo_optimizado.swift'\n\n");
+                    sbBitacora.append("=== Bitacora de Optimización ===\n");
                     for (String cambio : optResult.getBitacoraCambios()) {
                         sbBitacora.append("• ").append(cambio).append("\n");
                     }
                     this.areaBitacora.setText(sbBitacora.toString());
                 } else {
-                    this.areaBitacora.append("\n✔ [RE-COMPILACIÓN EJECUTADA CON ÉXITO A LAS " + java.time.LocalTime.now().toString().substring(0, 8) + "]");
+                    this.areaBitacora.append("[RE-COMPILACIÓN EJECUTADA CON ÉXITO A LAS " + java.time.LocalTime.now().toString().substring(0, 8) + "]");
                 }
 
             } else {
                 this.areaConsola.setForeground(new Color(192, 57, 43));
-                StringBuilder mensajeErrores = new StringBuilder(String.format("✖ SE ENCONTRARON ERRORES (Tiempo: %.3f ms):\n", milisegundos));
+                StringBuilder mensajeErrores = new StringBuilder(String.format("SE ENCONTRARON ERRORES (Tiempo: %.3f ms):\n", milisegundos));
                 for (String err : errores) {
                     mensajeErrores.append(err).append("\n");
                 }
